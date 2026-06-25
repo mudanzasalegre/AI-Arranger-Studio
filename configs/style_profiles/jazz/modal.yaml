@@ -1,0 +1,26 @@
+style: modal_jazz
+family: jazz
+meter_options: ['4/4', '3/4']
+tempo_ranges:
+  medium: [90, 140]
+  up: [140, 190]
+feel:
+  swing: true
+  straight_eighth_allowed: true
+  default_swing_ratio: 0.60
+harmony:
+  allow_static_vamps: true
+  allow_sus_chords: true
+  allow_planing: true
+  default_complexity: 0.55
+rhythm:
+  comping_density: medium
+  drum_density: medium
+melody:
+  motivic_development: high
+  space: medium_high
+roles:
+  bass: pedal_or_modal_ostinato
+  piano: quartal_voicings
+  drums: open_swing_or_straight
+  horns: sparse_modal_lines

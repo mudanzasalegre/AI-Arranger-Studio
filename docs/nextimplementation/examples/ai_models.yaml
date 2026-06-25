@@ -1,0 +1,51 @@
+# Ejemplo para copiar a configs/ai_models.yaml
+
+backends:
+  mock_symbolic:
+    enabled: true
+    type: symbolic
+    adapter: model_backends.symbolic.mock_backend.MockSymbolicBackend
+    commercial_use: allowed
+    tasks:
+      - infill_bars
+      - generate_track
+      - generate_full_sketch
+
+  midigpt:
+    enabled: false
+    type: symbolic
+    adapter: model_backends.symbolic.midigpt_backend.MidiGptBackend
+    model_name: yellow
+    commercial_use: review_required
+    dependency_mode: optional
+    install_hint: pip install "midigpt[inference]"
+    tasks:
+      - infill_bars
+      - generate_track
+      - continue_section
+
+  text2midi:
+    enabled: false
+    type: symbolic
+    adapter: model_backends.symbolic.text2midi_backend.Text2MidiBackend
+    commercial_use: review_required
+    dependency_mode: optional
+    execution_mode: worker_or_subprocess
+    tasks:
+      - generate_full_sketch
+
+  llm_planner:
+    enabled: false
+    type: planner
+    adapter: arranger_core.planning.llm.planner.LlmPlanner
+    commercial_use: review_required
+    output_mode: strict_json
+    tasks:
+      - plan_song
+
+settings:
+  forbid_audio_models: true
+  artifact_quarantine_required: true
+  require_take_acceptance: true
+  default_max_ai_attempts: 3
+  export_pending_takes: false

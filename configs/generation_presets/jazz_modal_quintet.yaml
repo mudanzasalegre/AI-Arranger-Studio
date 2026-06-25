@@ -1,0 +1,22 @@
+id: jazz_modal_quintet
+name: Modal jazz quintet
+description: Open modal vamp for quintet with spacious harmony and repeated motivic cells.
+prompt: modal jazz en Re menor, 124 bpm, vamp modal de 16 compases, quinteto con saxo alto, trompeta, piano, contrabajo y bateria
+spec:
+  prompt: modal jazz en Re menor, 124 bpm, vamp modal de 16 compases, quinteto con saxo alto, trompeta, piano, contrabajo y bateria
+  style: modal_jazz
+  key: D minor
+  meter: '4/4'
+  tempo: 124
+  form: modal_vamp_16
+  ensemble: jazz_quintet
+  duration_bars: 16
+  instruments: [drum_kit, double_bass, piano, alto_sax, trumpet_bflat]
+  density: medium
+  mood: nocturnal
+  complexity: 0.52
+  seed: 2404
+  constraints:
+    preset_id: jazz_modal_quintet
+    feel: open_modal
+    required_features: [modal_vamp, pedal_points, sparse_horns]

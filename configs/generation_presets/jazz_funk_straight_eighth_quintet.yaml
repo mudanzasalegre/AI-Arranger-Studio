@@ -1,0 +1,22 @@
+id: jazz_funk_straight_eighth_quintet
+name: Funk jazz straight-eighth quintet
+description: Straight-eighth funk jazz vamp with backbeat, dense comping and horn stabs.
+prompt: funk jazz straight-eighth en Mi menor, 108 bpm, vamp de 16 compases, quinteto con saxo alto, trompeta, piano, contrabajo y bateria
+spec:
+  prompt: funk jazz straight-eighth en Mi menor, 108 bpm, vamp de 16 compases, quinteto con saxo alto, trompeta, piano, contrabajo y bateria
+  style: funk_jazz
+  key: E minor
+  meter: '4/4'
+  tempo: 108
+  form: modal_vamp_16
+  ensemble: jazz_quintet
+  duration_bars: 16
+  instruments: [drum_kit, double_bass, piano, alto_sax, trumpet_bflat]
+  density: high
+  mood: energetic
+  complexity: 0.48
+  seed: 2407
+  constraints:
+    preset_id: jazz_funk_straight_eighth_quintet
+    feel: funk
+    required_features: [straight_eighth, backbeat, horn_stabs]

@@ -1,0 +1,22 @@
+id: jazz_hard_bop_minor_blues_sextet
+name: Hard bop minor blues sextet
+description: Minor blues with alto lead, brass responses, shout chorus and medium-up swing.
+prompt: hard bop nocturno en Do menor, 132 bpm, blues menor, sexteto con saxo alto, trompeta, trombon, piano, contrabajo y bateria, shout chorus final
+spec:
+  prompt: hard bop nocturno en Do menor, 132 bpm, blues menor, sexteto con saxo alto, trompeta, trombon, piano, contrabajo y bateria, shout chorus final
+  style: hard_bop
+  substyle: minor_blues
+  key: C minor
+  meter: '4/4'
+  tempo: 132
+  form: minor_blues_12
+  ensemble: jazz_sextet
+  duration_bars: 12
+  instruments: [drum_kit, double_bass, piano, alto_sax, trumpet_bflat, trombone]
+  density: medium_high
+  complexity: 0.78
+  seed: 1234
+  constraints:
+    preset_id: jazz_hard_bop_minor_blues_sextet
+    feel: swing
+    required_features: [minor_blues, horn_responses, shout_chorus, walking_bass]

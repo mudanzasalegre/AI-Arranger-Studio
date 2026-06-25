@@ -1,0 +1,29 @@
+style: bebop
+family: jazz
+meter_options: ['4/4']
+tempo_ranges:
+  medium_up: [150, 190]
+  up: [190, 260]
+feel:
+  swing: true
+  default_swing_ratio: 0.64
+harmony:
+  allow_extended_chords: true
+  allow_tritone_subs: true
+  allow_secondary_dominants: true
+  default_complexity: 0.82
+rhythm:
+  comping_density: medium_high
+  drum_density: high
+melody:
+  chromaticism: high
+  enclosure: high
+  phrase_length_bars: [2, 4]
+instrumentation:
+  default_ensemble: jazz_quintet
+  preferred_lead: alto_sax
+roles:
+  bass: fast_walking_bass
+  piano: syncopated_rootless_comping
+  drums: up_tempo_swing_ride
+  horns: bebop_head_and_responses

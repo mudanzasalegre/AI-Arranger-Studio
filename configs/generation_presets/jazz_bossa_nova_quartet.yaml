@@ -1,0 +1,22 @@
+id: jazz_bossa_nova_quartet
+name: Bossa nova quartet
+description: Straight-eighth bossa quartet with alto lead, light responses and extended harmony.
+prompt: bossa nova en Sol mayor, 138 bpm, forma latin 32, cuarteto con saxo alto, piano, contrabajo y bateria, relajado
+spec:
+  prompt: bossa nova en Sol mayor, 138 bpm, forma latin 32, cuarteto con saxo alto, piano, contrabajo y bateria, relajado
+  style: bossa_nova
+  key: G major
+  meter: '4/4'
+  tempo: 138
+  form: bossa_32
+  ensemble: jazz_quartet_alto
+  duration_bars: 32
+  instruments: [drum_kit, double_bass, piano, alto_sax]
+  density: medium
+  mood: relaxed
+  complexity: 0.56
+  seed: 2405
+  constraints:
+    preset_id: jazz_bossa_nova_quartet
+    feel: bossa
+    required_features: [straight_eighth, bossa_bass, light_responses]

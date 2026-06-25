@@ -1,0 +1,32 @@
+style: hard_bop
+family: jazz
+meter_options: ['4/4']
+tempo_ranges:
+  ballad: [60, 88]
+  medium: [108, 150]
+  up: [150, 220]
+feel:
+  swing: true
+  default_swing_ratio: 0.62
+harmony:
+  allow_extended_chords: true
+  allow_tritone_subs: true
+  allow_backdoor: true
+  allow_secondary_dominants: true
+  default_complexity: 0.75
+rhythm:
+  comping_density: medium
+  drum_density: medium_high
+melody:
+  chromaticism: medium_high
+  motif_repetition: medium
+  phrase_length_bars: [2, 4]
+instrumentation:
+  default_ensemble: jazz_quintet
+  preferred_lead: alto_sax
+  allowed: [drum_kit, double_bass, piano, alto_sax, tenor_sax, trumpet_bflat, trombone]
+roles:
+  bass: walking_bass
+  piano: rootless_comping
+  drums: swing_ride
+  horns: call_response_and_shout

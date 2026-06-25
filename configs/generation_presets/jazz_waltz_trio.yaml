@@ -1,0 +1,22 @@
+id: jazz_waltz_trio
+name: Jazz waltz trio
+description: Three-four jazz trio with waltz ride, walking bass in three and piano lead.
+prompt: jazz waltz en La menor, 150 bpm, 3/4, trio con piano, contrabajo y bateria, lirico
+spec:
+  prompt: jazz waltz en La menor, 150 bpm, 3/4, trio con piano, contrabajo y bateria, lirico
+  style: jazz_waltz
+  key: A minor
+  meter: '3/4'
+  tempo: 150
+  form: jazz_waltz_32
+  ensemble: jazz_trio
+  duration_bars: 32
+  instruments: [drum_kit, double_bass, piano]
+  density: medium
+  mood: lyrical
+  complexity: 0.64
+  seed: 2406
+  constraints:
+    preset_id: jazz_waltz_trio
+    feel: waltz
+    required_features: [three_four, waltz_bass, piano_lead]

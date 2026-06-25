@@ -1,0 +1,6 @@
+{
+  "backend": "text2midi",
+  "prompt": "Hard bop minor blues in C minor, 132 BPM, jazz sextet with walking bass, piano comping, alto sax lead, trumpet and trombone responses.",
+  "seed": 1234,
+  "import_as": "sketch"
+}

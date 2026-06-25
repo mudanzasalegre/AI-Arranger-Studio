@@ -1,0 +1,23 @@
+id: jazz_bebop_blues_quintet
+name: Bebop blues quintet
+description: Up-tempo bebop blues with alto and trumpet frontline, dense chromatic language.
+prompt: bebop blues en Fa mayor, 204 bpm, quinteto con saxo alto, trompeta, piano, contrabajo y bateria, denso y energico
+spec:
+  prompt: bebop blues en Fa mayor, 204 bpm, quinteto con saxo alto, trompeta, piano, contrabajo y bateria, denso y energico
+  style: bebop
+  substyle: jazz_blues
+  key: F major
+  meter: '4/4'
+  tempo: 204
+  form: jazz_blues_12
+  ensemble: jazz_quintet
+  duration_bars: 12
+  instruments: [drum_kit, double_bass, piano, alto_sax, trumpet_bflat]
+  density: high
+  mood: energetic
+  complexity: 0.86
+  seed: 2401
+  constraints:
+    preset_id: jazz_bebop_blues_quintet
+    feel: uptempo_swing
+    required_features: [bebop_blues, fast_walking_bass, horn_responses]

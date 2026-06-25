@@ -1,0 +1,8 @@
+[project]
+name = "dataset-tools"
+version = "0.1.0"
+dependencies = ["pydantic", "pyyaml", "mido", "music21"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

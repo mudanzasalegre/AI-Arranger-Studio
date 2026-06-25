@@ -1,0 +1,21 @@
+id: jazz_swing_aaba_quartet
+name: Swing AABA quartet
+description: Medium swing AABA quartet with tenor lead, riff responses and classic rhythm section.
+prompt: swing medio en Si bemol mayor, 144 bpm, AABA de 32 compases, cuarteto con saxo tenor, piano, contrabajo y bateria
+spec:
+  prompt: swing medio en Si bemol mayor, 144 bpm, AABA de 32 compases, cuarteto con saxo tenor, piano, contrabajo y bateria
+  style: swing
+  key: Bb major
+  meter: '4/4'
+  tempo: 144
+  form: aaba_32
+  ensemble: jazz_quartet_tenor
+  duration_bars: 32
+  instruments: [drum_kit, double_bass, piano, tenor_sax]
+  density: medium
+  complexity: 0.62
+  seed: 2402
+  constraints:
+    preset_id: jazz_swing_aaba_quartet
+    feel: swing
+    required_features: [aaba, walking_bass, tenor_lead]

@@ -1,0 +1,81 @@
+evaluation_prompts:
+  - id: eval_001
+    preset_id: jazz_hard_bop_minor_blues_sextet
+    seed: 3101
+    prompt: hard bop nocturno en Do menor, 132 bpm, blues menor, sexteto con saxo alto, trompeta, trombon, piano, contrabajo y bateria
+  - id: eval_002
+    preset_id: jazz_hard_bop_minor_blues_sextet
+    seed: 3102
+    prompt: hard-bop blues menor en Eb menor, 140 bpm, sexteto con alto sax, trumpet, trombone, piano, bass and drums
+  - id: eval_003
+    preset_id: jazz_bebop_blues_quintet
+    seed: 3103
+    prompt: bebop blues en Fa mayor, 204 bpm, quinteto de saxo alto y trompeta con ritmo denso
+  - id: eval_004
+    preset_id: jazz_bebop_blues_quintet
+    seed: 3104
+    prompt: up tempo bop 12 bar blues in Bb major, quintet, busy melody and fast walking bass
+  - id: eval_005
+    preset_id: jazz_swing_aaba_quartet
+    seed: 3105
+    prompt: swing medio en Si bemol mayor, 144 bpm, AABA de 32 compases, cuarteto con saxo tenor
+  - id: eval_006
+    preset_id: jazz_swing_aaba_quartet
+    seed: 3106
+    prompt: classic swing AABA in G major, quartet with tenor sax, piano, bass and drums
+  - id: eval_007
+    preset_id: jazz_ballad_quartet
+    seed: 3107
+    prompt: jazz ballad lirica en Fa mayor, 72 bpm, AABA, cuarteto suave con saxo tenor
+  - id: eval_008
+    preset_id: jazz_ballad_quartet
+    seed: 3108
+    prompt: slow ballad in Db major, sparse quartet, lyrical tenor and quiet rhythm section
+  - id: eval_009
+    preset_id: jazz_modal_quintet
+    seed: 3109
+    prompt: modal jazz en Re menor, 124 bpm, vamp modal de 16 compases, quinteto abierto
+  - id: eval_010
+    preset_id: jazz_modal_quintet
+    seed: 3110
+    prompt: spacious modal vamp in C minor, quintet, open drums and repeated motivic cells
+  - id: eval_011
+    preset_id: jazz_bossa_nova_quartet
+    seed: 3111
+    prompt: bossa nova en Sol mayor, 138 bpm, forma latin 32, cuarteto relajado con saxo alto
+  - id: eval_012
+    preset_id: jazz_bossa_nova_quartet
+    seed: 3112
+    prompt: latin jazz bossa in D major, quartet, straight eighth groove and gentle melody
+  - id: eval_013
+    preset_id: jazz_waltz_trio
+    seed: 3113
+    prompt: jazz waltz en La menor, 150 bpm, 3/4, trio con piano, contrabajo y bateria
+  - id: eval_014
+    preset_id: jazz_waltz_trio
+    seed: 3114
+    prompt: vals jazz en C menor, trio lirico, compas 3/4, piano lead
+  - id: eval_015
+    preset_id: jazz_funk_straight_eighth_quintet
+    seed: 3115
+    prompt: funk jazz straight-eighth en Mi menor, 108 bpm, vamp de 16 compases, quinteto con horn stabs
+  - id: eval_016
+    preset_id: jazz_funk_straight_eighth_quintet
+    seed: 3116
+    prompt: jazz funk in G minor, straight eighth backbeat, alto and trumpet riffs
+  - id: eval_017
+    preset_id: jazz_hard_bop_minor_blues_sextet
+    seed: 3117
+    prompt: blues menor hard bop en G menor, sexteto, shout chorus final y bajo caminante
+  - id: eval_018
+    preset_id: jazz_ballad_quartet
+    seed: 3118
+    prompt: balada jazz nocturna en C mayor, 68 bpm, cuarteto, poco denso
+  - id: eval_019
+    preset_id: jazz_modal_quintet
+    seed: 3119
+    prompt: modal vamp 16 bars in F minor, quintet, sparse horn responses
+  - id: eval_020
+    preset_id: jazz_bossa_nova_quartet
+    seed: 3120
+    prompt: bossa relajada en A mayor, cuarteto, latin 32, straight eighth

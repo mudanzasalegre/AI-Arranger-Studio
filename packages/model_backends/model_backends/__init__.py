@@ -1,0 +1,49 @@
+from model_backends.base import (
+    MODEL_BACKENDS_CONTRACT_VERSION,
+    ModelArtifact,
+    ModelCapabilities,
+    ModelGenerationRequest,
+    ModelGenerationResult,
+    ModelTask,
+    MusicModelBackend,
+)
+from model_backends.config import (
+    AIModelsConfig,
+    BackendConfig,
+    build_model_backend_registry,
+    load_ai_models_config,
+)
+from model_backends.errors import (
+    ModelBackendConfigurationError,
+    ModelBackendError,
+    ModelBackendUnavailableError,
+    ModelGenerationError,
+    UnsupportedModelTaskError,
+)
+from model_backends.registry import ModelBackendRegistry, RegisteredModelBackend
+from model_backends.symbolic.mock_backend import MockSymbolicBackend
+
+__version__ = MODEL_BACKENDS_CONTRACT_VERSION
+
+__all__ = [
+    "AIModelsConfig",
+    "BackendConfig",
+    "MODEL_BACKENDS_CONTRACT_VERSION",
+    "MockSymbolicBackend",
+    "ModelArtifact",
+    "ModelBackendConfigurationError",
+    "ModelBackendError",
+    "ModelBackendRegistry",
+    "ModelBackendUnavailableError",
+    "ModelCapabilities",
+    "ModelGenerationError",
+    "ModelGenerationRequest",
+    "ModelGenerationResult",
+    "ModelTask",
+    "MusicModelBackend",
+    "RegisteredModelBackend",
+    "UnsupportedModelTaskError",
+    "__version__",
+    "build_model_backend_registry",
+    "load_ai_models_config",
+]

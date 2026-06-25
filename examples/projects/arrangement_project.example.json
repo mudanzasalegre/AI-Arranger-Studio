@@ -1,0 +1,314 @@
+{
+  "schema_version": "0.1.0",
+  "project_id": "demo-hard-bop-001",
+  "metadata": {
+    "title": "Minor Blues Demo",
+    "style": "hard_bop",
+    "seed": 1234
+  },
+  "generation_spec": {
+    "schema_version": "0.1.0",
+    "prompt": "hard bop minor blues quartet",
+    "style": "hard_bop",
+    "substyle": null,
+    "tempo": 132,
+    "key": "C minor",
+    "meter": "4/4",
+    "form": "minor_blues_12",
+    "ensemble": "jazz_quartet",
+    "duration_bars": 4,
+    "density": "medium",
+    "complexity": 0.5,
+    "instruments": [
+      "double_bass",
+      "piano"
+    ],
+    "constraints": {},
+    "seed": 1234
+  },
+  "tempo_map": [
+    {
+      "bar": 1,
+      "bpm": 132
+    }
+  ],
+  "key_map": [
+    {
+      "bar": 1,
+      "key": "C minor"
+    }
+  ],
+  "meter_map": [
+    {
+      "bar": 1,
+      "meter": "4/4"
+    }
+  ],
+  "form": [
+    {
+      "name": "Head In",
+      "start_bar": 1,
+      "end_bar": 4,
+      "label": null,
+      "metadata": {}
+    }
+  ],
+  "chord_grid": [
+    {
+      "bar": 1,
+      "beat": 1,
+      "symbol": "Cm7",
+      "duration": null,
+      "root": null,
+      "quality": null,
+      "bass": null,
+      "metadata": {}
+    },
+    {
+      "bar": 2,
+      "beat": 1,
+      "symbol": "Fm7",
+      "duration": null,
+      "root": null,
+      "quality": null,
+      "bass": null,
+      "metadata": {}
+    },
+    {
+      "bar": 3,
+      "beat": 1,
+      "symbol": "Cm7",
+      "duration": null,
+      "root": null,
+      "quality": null,
+      "bass": null,
+      "metadata": {}
+    },
+    {
+      "bar": 4,
+      "beat": 1,
+      "symbol": "G7alt",
+      "duration": null,
+      "root": null,
+      "quality": null,
+      "bass": null,
+      "metadata": {}
+    }
+  ],
+  "tracks": [
+    {
+      "id": "double_bass",
+      "instrument": "double_bass",
+      "role": "walking_bass",
+      "name": null,
+      "channel": null,
+      "bars": [
+        {
+          "number": 1,
+          "meter": null,
+          "chords": [],
+          "events": [
+            {
+              "start": 0,
+              "duration": 1,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "note",
+              "pitch": "C2",
+              "velocity": 76,
+              "tied_to_next": false,
+              "articulations": [],
+              "dynamic": null
+            },
+            {
+              "start": 1,
+              "duration": 1,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "note",
+              "pitch": "G2",
+              "velocity": 72,
+              "tied_to_next": false,
+              "articulations": [],
+              "dynamic": null
+            },
+            {
+              "start": 2,
+              "duration": 1,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "note",
+              "pitch": "Bb2",
+              "velocity": 74,
+              "tied_to_next": false,
+              "articulations": [],
+              "dynamic": null
+            },
+            {
+              "start": 3,
+              "duration": 1,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "note",
+              "pitch": "B2",
+              "velocity": 70,
+              "tied_to_next": false,
+              "articulations": [],
+              "dynamic": null
+            }
+          ],
+          "metadata": {}
+        },
+        {
+          "number": 2,
+          "meter": null,
+          "chords": [],
+          "events": [
+            {
+              "start": 0,
+              "duration": 4,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "rest"
+            }
+          ],
+          "metadata": {}
+        },
+        {
+          "number": 3,
+          "meter": null,
+          "chords": [],
+          "events": [
+            {
+              "start": 0,
+              "duration": 4,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "rest"
+            }
+          ],
+          "metadata": {}
+        },
+        {
+          "number": 4,
+          "meter": null,
+          "chords": [],
+          "events": [
+            {
+              "start": 0,
+              "duration": 4,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "rest"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "events": [],
+      "metadata": {}
+    },
+    {
+      "id": "piano",
+      "instrument": "piano",
+      "role": "comping",
+      "name": null,
+      "channel": null,
+      "bars": [
+        {
+          "number": 1,
+          "meter": null,
+          "chords": [],
+          "events": [
+            {
+              "start": 0,
+              "duration": 4,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "note",
+              "pitch": "Eb4",
+              "velocity": 64,
+              "tied_to_next": false,
+              "articulations": [],
+              "dynamic": null
+            },
+            {
+              "start": 0,
+              "duration": 4,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "note",
+              "pitch": "Bb4",
+              "velocity": 62,
+              "tied_to_next": false,
+              "articulations": [],
+              "dynamic": null
+            }
+          ],
+          "metadata": {}
+        },
+        {
+          "number": 2,
+          "meter": null,
+          "chords": [],
+          "events": [
+            {
+              "start": 0,
+              "duration": 4,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "rest"
+            }
+          ],
+          "metadata": {}
+        },
+        {
+          "number": 3,
+          "meter": null,
+          "chords": [],
+          "events": [
+            {
+              "start": 0,
+              "duration": 4,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "rest"
+            }
+          ],
+          "metadata": {}
+        },
+        {
+          "number": 4,
+          "meter": null,
+          "chords": [],
+          "events": [
+            {
+              "start": 0,
+              "duration": 4,
+              "voice": 1,
+              "staff": null,
+              "annotations": {},
+              "type": "rest"
+            }
+          ],
+          "metadata": {}
+        }
+      ],
+      "events": [],
+      "metadata": {}
+    }
+  ],
+  "validation_report": {},
+  "export_manifest": {}
+}

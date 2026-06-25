@@ -1,0 +1,23 @@
+drum_grooves:
+  swing_ride_basic:
+    meter: '4/4'
+    feel: swing
+    events:
+      ride: ['1', '1+a', '2', '2+a', '3', '3+a', '4', '4+a']
+      hihat_pedal: ['2', '4']
+      kick: ['1?', '3?']
+      snare_ghost: ['2a?', '4a?']
+  bossa_basic:
+    meter: '4/4'
+    feel: straight
+    events:
+      cross_stick: ['2', '4']
+      kick: ['1', '1&', '3', '3&']
+      hihat: ['1&', '2&', '3&', '4&']
+  funk_jazz_basic:
+    meter: '4/4'
+    feel: straight
+    events:
+      hihat: ['1', '1&', '2', '2&', '3', '3&', '4', '4&']
+      kick: ['1', '2&', '3']
+      snare: ['2', '4']

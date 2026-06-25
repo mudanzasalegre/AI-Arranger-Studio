@@ -1,0 +1,14 @@
+Lee docs/nextimplementation completo.
+
+Estamos en AI Arranger Studio y ya esta implementado hasta Epic 16:
+SongPlan, SectionPlan, PhrasePlan y GrooveMap.
+
+Sigue la cola PR-00 a PR-19 de docs/nextimplementation/15_IMPLEMENTATION_BACKLOG.md.
+No continues con el antiguo Epic 17 hasta completar PR-02 a PR-06.
+
+No integres audio. No permitas que ningun modelo escriba directamente sobre el
+proyecto activo. Todo artifact de IA debe pasar por quarantine, importacion,
+fusion controlada, validacion y take pending.
+
+Implementa solo el PR pedido por el usuario y no avances al siguiente sin nuevo
+input. Ejecuta los gates de docs/nextimplementation/16_EXECUTION_INSTRUCTIONS.md.

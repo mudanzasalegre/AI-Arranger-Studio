@@ -1,0 +1,26 @@
+style: jazz_waltz
+family: jazz
+meter_options: ['3/4']
+tempo_ranges:
+  medium: [126, 162]
+  up: [162, 196]
+feel:
+  swing: true
+  triple_meter: true
+  default_swing_ratio: 0.58
+harmony:
+  allow_extended_chords: true
+  allow_modal_interchange: true
+  default_complexity: 0.64
+rhythm:
+  comping_density: medium
+  drum_density: medium
+melody:
+  lyricism: medium_high
+  phrase_length_bars: [4, 8]
+instrumentation:
+  default_ensemble: jazz_trio
+roles:
+  bass: waltz_walking_bass
+  piano: three_four_comping
+  drums: jazz_waltz_ride

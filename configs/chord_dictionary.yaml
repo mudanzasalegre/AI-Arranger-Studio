@@ -1,0 +1,66 @@
+# Chord grammar, not a closed finite list.
+roots: [C, C#, Db, D, D#, Eb, E, F, F#, Gb, G, G#, Ab, A, A#, Bb, B, Cb, B#]
+qualities:
+  major_triad:
+    aliases: ['', maj, major, M]
+    intervals: [0, 4, 7]
+    default_scale: ionian
+    allowed_extensions: [6, 7, 9, '#11', 13]
+  minor_triad:
+    aliases: [m, min, minor, '-']
+    intervals: [0, 3, 7]
+    default_scale: dorian
+    allowed_extensions: [6, 7, 9, 11, 13, maj7]
+  dominant:
+    aliases: ['7', dom]
+    intervals: [0, 4, 7, 10]
+    default_scale: mixolydian
+    allowed_extensions: [9, 11, 13, b9, '#9', '#11', b13, b5, '#5', alt]
+  diminished:
+    aliases: [dim, o]
+    intervals: [0, 3, 6]
+    default_scale: whole_half_diminished
+    allowed_extensions: [7]
+  diminished_seventh:
+    aliases: [dim7, o7]
+    intervals: [0, 3, 6, 9]
+    default_scale: whole_half_diminished
+    allowed_extensions: []
+  half_diminished:
+    aliases: [m7b5, ø, ø7]
+    intervals: [0, 3, 6, 10]
+    default_scale: locrian_natural_2
+    allowed_extensions: [9, 11, b13]
+  augmented:
+    aliases: [aug, '+']
+    intervals: [0, 4, 8]
+    default_scale: whole_tone
+    allowed_extensions: [7, maj7, 9]
+  suspended:
+    aliases: [sus, sus4, 7sus, 9sus, 13sus]
+    intervals: [0, 5, 7, 10]
+    default_scale: mixolydian
+    allowed_extensions: [9, 13]
+extensions:
+  '6': 9
+  '7': 10
+  maj7: 11
+  '9': 14
+  '11': 17
+  '13': 21
+alterations:
+  b5: 6
+  '#5': 8
+  b9: 13
+  '#9': 15
+  '#11': 18
+  b13: 20
+special_symbols:
+  alt:
+    allowed_alterations: [b9, '#9', b5, '#5', b13]
+  add:
+    examples: [add9, add#11, add13]
+  omit:
+    examples: [no3, no5]
+slash_chords: true
+polychords_future: true

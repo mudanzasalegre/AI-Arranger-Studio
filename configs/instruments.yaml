@@ -1,0 +1,112 @@
+instruments:
+  piano:
+    display_name: Piano
+    family: keyboard
+    midi_program: 0
+    clef: treble_bass
+    transposition_semitones: 0
+    sounding_range: [A0, C8]
+    comfortable_range: [A1, C7]
+    polyphonic: true
+    breath_required: false
+  double_bass:
+    display_name: Double Bass
+    family: strings
+    midi_program: 32
+    clef: bass
+    transposition_semitones: -12
+    sounding_range: [E1, G4]
+    comfortable_range: [E1, C4]
+    polyphonic: false
+    breath_required: false
+  drum_kit:
+    display_name: Drum Kit
+    family: percussion
+    midi_channel: 10
+    midi_program: null
+    clef: percussion
+    transposition_semitones: 0
+    sounding_range: [C1, C6]
+    comfortable_range: [C1, C6]
+    polyphonic: true
+    breath_required: false
+  alto_sax:
+    display_name: Alto Saxophone in Eb
+    family: woodwind
+    midi_program: 65
+    clef: treble
+    transposition_semitones: -9
+    sounding_range: [Db3, Ab5]
+    comfortable_range: [G3, E5]
+    polyphonic: false
+    breath_required: true
+  tenor_sax:
+    display_name: Tenor Saxophone in Bb
+    family: woodwind
+    midi_program: 66
+    clef: treble
+    transposition_semitones: -14
+    sounding_range: [Ab2, E5]
+    comfortable_range: [C3, C5]
+    polyphonic: false
+    breath_required: true
+  trumpet_bflat:
+    display_name: Trumpet in Bb
+    family: brass
+    midi_program: 56
+    clef: treble
+    transposition_semitones: -2
+    sounding_range: [F#3, D6]
+    comfortable_range: [A3, Bb5]
+    polyphonic: false
+    breath_required: true
+  trombone:
+    display_name: Trombone
+    family: brass
+    midi_program: 57
+    clef: bass
+    transposition_semitones: 0
+    sounding_range: [E2, Bb4]
+    comfortable_range: [F2, F4]
+    polyphonic: false
+    breath_required: true
+  flute:
+    display_name: Flute
+    family: woodwind
+    midi_program: 73
+    clef: treble
+    transposition_semitones: 0
+    sounding_range: [C4, D7]
+    comfortable_range: [D4, A6]
+    polyphonic: false
+    breath_required: true
+  clarinet_bflat:
+    display_name: Clarinet in Bb
+    family: woodwind
+    midi_program: 71
+    clef: treble
+    transposition_semitones: -2
+    sounding_range: [D3, Bb6]
+    comfortable_range: [E3, G6]
+    polyphonic: false
+    breath_required: true
+  baritone_sax:
+    display_name: Baritone Saxophone in Eb
+    family: woodwind
+    midi_program: 67
+    clef: treble
+    transposition_semitones: -21
+    sounding_range: [C2, Ab4]
+    comfortable_range: [Eb2, Eb4]
+    polyphonic: false
+    breath_required: true
+  tuba:
+    display_name: Tuba
+    family: brass
+    midi_program: 58
+    clef: bass
+    transposition_semitones: 0
+    sounding_range: [D1, F4]
+    comfortable_range: [F1, C4]
+    polyphonic: false
+    breath_required: true

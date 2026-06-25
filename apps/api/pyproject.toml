@@ -1,0 +1,16 @@
+[project]
+name = "ai-arranger-api"
+version = "0.1.0"
+dependencies = [
+  "arranger-core",
+  "dataset-tools",
+  "model-backends",
+  "fastapi",
+  "uvicorn",
+  "pydantic",
+  "pyyaml",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

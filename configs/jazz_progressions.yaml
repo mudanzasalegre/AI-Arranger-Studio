@@ -1,0 +1,70 @@
+progressions:
+  ii_v_i_major:
+    bars: 4
+    degrees: ["ii-7", "V7", "Imaj7", "Imaj7"]
+    variations:
+      - ["ii-9", "V13", "Imaj9", "I6/9"]
+      - ["ii-7", "bII7#11", "Imaj9", "VI7alt"]
+  ii_v_i_minor:
+    bars: 4
+    degrees: ["iiø7", "V7alt", "i-7", "i-6"]
+    variations:
+      - ["iiø7", "V7b9", "i-9", "VI7alt"]
+  turnaround_major:
+    bars: 2
+    degrees:
+      - ["Imaj7", "VI7alt", "ii-7", "V13"]
+      - ["iii-7", "VI7alt", "ii-7", "V7alt"]
+  jazz_blues_12:
+    bars: 12
+    degrees:
+      - "I7"
+      - "IV7"
+      - "I7"
+      - "I7"
+      - "IV7"
+      - "#IVdim7"
+      - "I7"
+      - "VI7alt"
+      - "ii-7"
+      - "V7"
+      - "I7 VI7alt"
+      - "ii-7 V7"
+  minor_blues_12:
+    bars: 12
+    degrees:
+      - "i-7"
+      - "iv-7"
+      - "i-7"
+      - "i-7"
+      - "iv-7"
+      - "iv-7"
+      - "i-7"
+      - "VI7alt"
+      - "iiø7"
+      - "V7alt"
+      - "i-7"
+      - "V7alt"
+  rhythm_changes_like_a:
+    bars: 8
+    degrees:
+      - "Imaj7 VI7alt"
+      - "ii-7 V7"
+      - "iii-7 VI7alt"
+      - "ii-7 V7"
+      - "I7"
+      - "IV7 #IVdim7"
+      - "Imaj7 VI7alt"
+      - "ii-7 V7"
+  rhythm_changes_like_bridge:
+    bars: 8
+    degrees: ["III7", "III7", "VI7", "VI7", "II7", "II7", "V7", "V7"]
+  modal_dorian_vamp:
+    bars: 8
+    degrees: ["i-11", "i-11", "IV13", "IV13", "i-11", "i-11", "bVII13", "IV13"]
+  backdoor_cadence:
+    bars: 2
+    degrees: ["iv-7", "bVII7", "Imaj7"]
+  tritone_cadence:
+    bars: 2
+    degrees: ["ii-7", "bII7#11", "Imaj7"]

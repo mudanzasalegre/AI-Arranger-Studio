@@ -1,0 +1,13 @@
+ensembles:
+  jazz_trio:
+    instruments: [drum_kit, double_bass, piano]
+  jazz_quartet_alto:
+    instruments: [drum_kit, double_bass, piano, alto_sax]
+  jazz_quartet_tenor:
+    instruments: [drum_kit, double_bass, piano, tenor_sax]
+  jazz_quintet:
+    instruments: [drum_kit, double_bass, piano, alto_sax, trumpet_bflat]
+  jazz_sextet:
+    instruments: [drum_kit, double_bass, piano, alto_sax, trumpet_bflat, trombone]
+  concert_band_lite:
+    instruments: [flute, clarinet_bflat, alto_sax, tenor_sax, trumpet_bflat, trombone, tuba, drum_kit]

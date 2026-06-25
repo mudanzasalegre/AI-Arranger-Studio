@@ -1,0 +1,14 @@
+files:
+  - file_id: example_001
+    path: data/raw/example/example.mid
+    source: user_upload
+    title: Example MIDI
+    composer: unknown
+    license: private
+    copyright_notes: "Do not train unless user confirms rights."
+    usable_for_training: false
+    usable_for_pattern_extraction: false
+    style: jazz
+    quality: null
+    tags: []
+    hash: null

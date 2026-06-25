@@ -1,0 +1,22 @@
+id: jazz_ballad_quartet
+name: Jazz ballad quartet
+description: Lyrical slow AABA quartet with tenor lead, spacious comping and light ride.
+prompt: jazz ballad lirica en Fa mayor, 72 bpm, AABA, cuarteto con saxo tenor, piano, contrabajo y bateria, poco denso
+spec:
+  prompt: jazz ballad lirica en Fa mayor, 72 bpm, AABA, cuarteto con saxo tenor, piano, contrabajo y bateria, poco denso
+  style: jazz_ballad
+  key: F major
+  meter: '4/4'
+  tempo: 72
+  form: ballad_aaba_32
+  ensemble: jazz_quartet_tenor
+  duration_bars: 32
+  instruments: [drum_kit, double_bass, piano, tenor_sax]
+  density: low
+  mood: lyrical
+  complexity: 0.58
+  seed: 2403
+  constraints:
+    preset_id: jazz_ballad_quartet
+    feel: ballad
+    required_features: [ballad_aaba, sparse_comping, lyrical_melody]

@@ -1,0 +1,19 @@
+{
+  "backend": "midigpt",
+  "track_id": "alto_sax",
+  "bars": [
+    17,
+    18,
+    19,
+    20
+  ],
+  "instruction": "Regenera una frase bebop de densidad media, con respiración natural y resolución clara en el compás 21.",
+  "density": "medium",
+  "temperature": 0.85,
+  "seed": 1234,
+  "locked_tracks": [
+    "drums",
+    "double_bass",
+    "piano"
+  ]
+}

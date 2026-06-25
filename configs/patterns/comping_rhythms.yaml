@@ -1,0 +1,18 @@
+comping_rhythms:
+  sparse_syncopated:
+    density: low
+    cells:
+      - ['1&', '3']
+      - ['2&', '4&']
+      - ['1', '2&', '4']
+  medium_hard_bop:
+    density: medium
+    cells:
+      - ['1&', '2a', '4']
+      - ['2', '3&', '4&']
+      - ['1', '2&', '3a']
+  ballad_spread:
+    density: low_medium
+    cells:
+      - ['1', '3']
+      - ['1', '2&', '4']

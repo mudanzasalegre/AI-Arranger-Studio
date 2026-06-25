@@ -1,0 +1,97 @@
+{
+  "style": "hard_bop",
+  "substyle": "minor_blues",
+  "tempo": 132,
+  "meter": "4/4",
+  "key": "C minor",
+  "form": "minor_blues_12",
+  "ensemble": "jazz_sextet",
+  "instruments": [
+    "drum_kit",
+    "double_bass",
+    "piano",
+    "alto_sax",
+    "trumpet_bflat",
+    "trombone"
+  ],
+  "sections": [
+    {
+      "name": "intro",
+      "start_bar": 1,
+      "end_bar": 4,
+      "energy": 0.35,
+      "density_by_role": {
+        "drums": 0.3,
+        "bass": 0.4,
+        "piano": 0.3,
+        "melody": 0.0,
+        "horns": 0.0
+      },
+      "groove_feel": "swing"
+    },
+    {
+      "name": "head_in",
+      "start_bar": 5,
+      "end_bar": 16,
+      "energy": 0.65,
+      "density_by_role": {
+        "drums": 0.55,
+        "bass": 0.75,
+        "piano": 0.55,
+        "melody": 0.8,
+        "horns": 0.35
+      },
+      "groove_feel": "swing"
+    },
+    {
+      "name": "solo",
+      "start_bar": 17,
+      "end_bar": 28,
+      "energy": 0.78,
+      "density_by_role": {
+        "drums": 0.7,
+        "bass": 0.8,
+        "piano": 0.6,
+        "melody": 0.9,
+        "horns": 0.2
+      },
+      "groove_feel": "swing"
+    },
+    {
+      "name": "shout",
+      "start_bar": 29,
+      "end_bar": 40,
+      "energy": 0.9,
+      "density_by_role": {
+        "drums": 0.85,
+        "bass": 0.8,
+        "piano": 0.7,
+        "melody": 0.4,
+        "horns": 0.85
+      },
+      "groove_feel": "swing"
+    },
+    {
+      "name": "coda",
+      "start_bar": 41,
+      "end_bar": 44,
+      "energy": 0.55,
+      "density_by_role": {
+        "drums": 0.45,
+        "bass": 0.5,
+        "piano": 0.5,
+        "melody": 0.5,
+        "horns": 0.6
+      },
+      "groove_feel": "swing"
+    }
+  ],
+  "generation_strategy": {
+    "base": "rule_based",
+    "ai_enhancement": [
+      "melody_variation",
+      "horn_responses"
+    ],
+    "forbid_audio_models": true
+  }
+}

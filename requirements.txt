@@ -1,0 +1,20 @@
+# Local packages
+-e ./packages/arranger_core
+-e ./packages/dataset_tools
+-e ./packages/midi_models
+-e ./packages/model_backends
+-e ./apps/api
+
+# Backend/runtime
+fastapi
+uvicorn
+pydantic
+pyyaml
+pretty_midi
+music21
+mido
+httpx
+
+# Development checks
+pytest
+ruff

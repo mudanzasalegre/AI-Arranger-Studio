@@ -1,0 +1,8 @@
+{
+  "prompt": "hard bop nocturno en Do menor, 132 bpm, blues menor de 12 compases, sexteto con saxo alto, trompeta, trombón, piano, contrabajo y batería, bajo caminante, piano rootless comping, batería swing y shout chorus final",
+  "seed": 1234,
+  "options": {
+    "export": true,
+    "validate": true
+  }
+}

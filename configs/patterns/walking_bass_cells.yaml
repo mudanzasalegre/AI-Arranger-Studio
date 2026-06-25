@@ -1,0 +1,11 @@
+walking_bass_cells:
+  approach_from_below:
+    beats: [root, third_or_fifth, chromatic_below_next_root, next_root]
+  diatonic_step:
+    beats: [root, second, third, chromatic_or_diatonic_approach]
+  enclosure_next_root:
+    beats: [root, fifth, chromatic_above_next_root, chromatic_below_next_root]
+  dominant_motion:
+    beats: [root, third, fifth, flat_seventh]
+  minor_walk:
+    beats: [root, minor_third, fourth_or_fifth, chromatic_approach]

@@ -1,0 +1,52 @@
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Python caches and packaging
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node / Next.js
+node_modules/
+apps/web/node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/*.tsbuildinfo
+npm-debug.log*
+
+# Build artifacts
+dist/
+build/
+
+# Generated outputs, models and private/local data
+models/
+outputs/
+data/raw/
+data/private/
+data/processed/
+midi_databases/
+
+# Heavy model/checkpoint artifacts
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+*.pkl
+
+# Private musical source/export files
+*.mid
+*.midi
+*.musicxml
+*.mxl
+
+# OS and IDE files
+.DS_Store
+.idea/
+.vscode/

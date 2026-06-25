@@ -1,0 +1,25 @@
+style: jazz_ballad
+family: jazz
+meter_options: ['4/4']
+tempo_ranges:
+  slow: [48, 72]
+  medium_slow: [72, 92]
+feel:
+  swing: true
+  default_swing_ratio: 0.58
+harmony:
+  allow_extended_chords: true
+  allow_substitutions: true
+  default_complexity: 0.65
+rhythm:
+  comping_density: low_medium
+  drum_density: low
+melody:
+  chromaticism: medium
+  lyricism: high
+  phrase_length_bars: [2, 4]
+roles:
+  bass: two_feel_or_sparse_walking
+  piano: spread_voicings
+  drums: brushes_or_light_ride
+  horns: lyrical_counterlines

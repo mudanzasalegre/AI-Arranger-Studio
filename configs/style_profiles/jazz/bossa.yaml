@@ -1,0 +1,23 @@
+style: bossa_nova
+family: jazz
+meter_options: ['4/4']
+tempo_ranges:
+  medium: [110, 160]
+feel:
+  swing: false
+  straight_eighth: true
+harmony:
+  allow_extended_chords: true
+  allow_secondary_dominants: true
+  default_complexity: 0.55
+rhythm:
+  comping_density: medium
+  drum_density: medium
+melody:
+  lyricism: high
+  chromaticism: low_medium
+roles:
+  bass: bossa_root_fifth
+  piano: bossa_comping
+  drums: bossa_groove
+  horns: light_responses

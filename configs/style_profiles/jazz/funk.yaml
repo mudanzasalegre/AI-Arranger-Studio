@@ -1,0 +1,26 @@
+style: funk_jazz
+family: jazz
+meter_options: ['4/4']
+tempo_ranges:
+  medium: [92, 118]
+  up: [118, 138]
+feel:
+  swing: false
+  straight_eighth: true
+harmony:
+  allow_static_vamps: true
+  allow_sus_chords: true
+  default_complexity: 0.48
+rhythm:
+  comping_density: high
+  drum_density: high
+melody:
+  motivic_riffs: high
+  chromaticism: low_medium
+instrumentation:
+  default_ensemble: jazz_quintet
+roles:
+  bass: syncopated_ostinato
+  piano: clav_like_comping
+  drums: funk_backbeat
+  horns: stabs_and_riffs
