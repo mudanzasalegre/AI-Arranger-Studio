@@ -1,4 +1,4 @@
-.PHONY: setup setup-web test lint api web demo-jazz export-demo validate-demo zip-demo package-smoke ai-contract-smoke train-symbolic-model golden-baseline demo-check build-web
+.PHONY: setup setup-web test lint api web demo-jazz export-demo validate-demo zip-demo package-smoke ai-contract-smoke tokenization-smoke statistical-smoke custom-role-model-smoke train-symbolic-model golden-baseline demo-check build-web
 
 setup:
 	python -m pip install -U pip
@@ -37,6 +37,15 @@ package-smoke:
 
 ai-contract-smoke:
 	python scripts/ai_contract_smoke.py
+
+tokenization-smoke:
+	python scripts/tokenization_dataset_smoke.py
+
+statistical-smoke:
+	python scripts/statistical_baselines_smoke.py
+
+custom-role-model-smoke:
+	python scripts/custom_role_model_smoke.py
 
 train-symbolic-model:
 	python scripts/train_symbolic_model.py

@@ -17,6 +17,7 @@ required = [
     "packages/dataset_tools/dataset_tools/__init__.py",
     "packages/midi_models/midi_models/__init__.py",
     "packages/model_backends/model_backends/__init__.py",
+    "packages/training/training/__init__.py",
     "configs/instruments.yaml",
     "configs/ai_models.yaml",
     "configs/chord_dictionary.yaml",

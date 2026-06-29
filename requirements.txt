@@ -3,6 +3,7 @@
 -e ./packages/dataset_tools
 -e ./packages/midi_models
 -e ./packages/model_backends
+-e ./packages/training
 -e ./apps/api
 
 # Backend/runtime

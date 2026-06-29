@@ -1,7 +1,15 @@
 from arranger_core.ai.artifact_importer import ArtifactImporter, ImportedModelArtifact
 from arranger_core.ai.artifact_store import ArtifactStore
 from arranger_core.ai.validation_gate import ValidationGate
-from arranger_core.ai_generators import AIWalkingBassGenerator
+from arranger_core.ai_generators import (
+    ROLE_MODEL_MODES_AVAILABLE,
+    AIDrumsGenerator,
+    AIHornResponseGenerator,
+    AIMelodyGenerator,
+    AIPianoCompingGenerator,
+    AIWalkingBassGenerator,
+    RoleModelMode,
+)
 from arranger_core.bass_engine import (
     BASS_ENGINE_VERSION,
     BassAiBackend,
@@ -25,6 +33,15 @@ from arranger_core.catalogs import (
 )
 from arranger_core.chords import ChordParser, ParsedChord
 from arranger_core.config_loader import MusicConfigLoader, find_repo_root, load_yaml_file
+from arranger_core.drums_engine import (
+    DRUM_ENGINE_VERSION,
+    DrumLedgerEntry,
+    DrumPatternLedger,
+    DrumsEngine,
+    DrumsEngineMode,
+    DrumsGrooveStyle,
+    DrumsValidationReport,
+)
 from arranger_core.exporters import (
     export_project,
     find_musescore_cli,
@@ -58,6 +75,7 @@ from arranger_core.melody_engine import (
 from arranger_core.merge.model_artifact_merger import ProjectMerger
 from arranger_core.model_contract import (
     MODEL_CONTRACT_VERSION,
+    DeterministicRoleModelBackend,
     DeterministicWalkingBassBackend,
     ModelBackend,
     ModelContractModel,
@@ -84,6 +102,17 @@ from arranger_core.performance import (
     VelocityRange,
     build_performance_map,
 )
+from arranger_core.piano_comping_engine import (
+    PIANO_COMPING_ENGINE_VERSION,
+    PianoCompingAiBackend,
+    PianoCompingEngine,
+    PianoCompingLedger,
+    PianoCompingLedgerEntry,
+    PianoCompingMode,
+    PianoCompingSource,
+    PianoCompingValidationReport,
+    PianoVoicingStyle,
+)
 from arranger_core.planning import (
     GenerationStrategy,
     LlmPlanner,
@@ -100,6 +129,22 @@ from arranger_core.prompt_compiler import (
     PromptCompiler,
     compile_prompt,
     normalize_prompt,
+)
+from arranger_core.release_gate import (
+    RELEASE_GATE_VERSION,
+    ReleaseExportMode,
+    validate_release_quality,
+)
+from arranger_core.retrieval import (
+    RETRIEVAL_MODEL_VERSION,
+    PatternAdapter,
+    PatternRetriever,
+    RetrievalCandidate,
+    RetrievalQuery,
+    retrieval_query_from_context,
+    retrieval_trace,
+    retrieve_pattern,
+    retrieve_patterns,
 )
 from arranger_core.role_generators import (
     DrumsGenerator,
@@ -164,6 +209,10 @@ from arranger_core.validators import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "AIDrumsGenerator",
+    "AIHornResponseGenerator",
+    "AIMelodyGenerator",
+    "AIPianoCompingGenerator",
     "AIWalkingBassGenerator",
     "ArrangementProject",
     "ArrangementTake",
@@ -181,6 +230,8 @@ __all__ = [
     "BassLineStyle",
     "BassValidationReport",
     "ChordSymbol",
+    "DRUM_ENGINE_VERSION",
+    "DeterministicRoleModelBackend",
     "GenerationSpec",
     "GenerationStrategy",
     "GrooveMap",
@@ -212,8 +263,11 @@ __all__ = [
     "MotifLedgerEntry",
     "NoteEvent",
     "RestEvent",
+    "ReleaseExportMode",
+    "ROLE_MODEL_MODES_AVAILABLE",
     "RoleIntent",
     "RoleModelGenerator",
+    "RoleModelMode",
     "SONG_PLAN_VERSION",
     "SchemaVersionError",
     "Section",
@@ -231,8 +285,14 @@ __all__ = [
     "__version__",
     "ChordParser",
     "CompileDefaults",
-    "DrumsGenerator",
     "DeterministicWalkingBassBackend",
+    "DrumLedgerEntry",
+    "DrumPatternLedger",
+    "DrumsEngine",
+    "DrumsEngineMode",
+    "DrumsGenerator",
+    "DrumsGrooveStyle",
+    "DrumsValidationReport",
     "EnergyPoint",
     "Ensemble",
     "EvaluationPrompt",
@@ -248,17 +308,32 @@ __all__ = [
     "ParsedChord",
     "PatternLibrary",
     "PERFORMANCE_MAP_VERSION",
+    "PIANO_COMPING_ENGINE_VERSION",
     "PerformanceMap",
     "PerformanceMapper",
     "PhrasePlan",
     "PlanAttempt",
     "PlanValidator",
+    "PianoCompingAiBackend",
+    "PianoCompingEngine",
     "PianoCompingGenerator",
+    "PianoCompingLedger",
+    "PianoCompingLedgerEntry",
+    "PianoCompingMode",
+    "PianoCompingSource",
+    "PianoCompingValidationReport",
+    "PianoVoicingStyle",
     "PromptCompiler",
     "ProjectMerger",
+    "RELEASE_GATE_VERSION",
+    "RETRIEVAL_MODEL_VERSION",
+    "PatternAdapter",
+    "PatternRetriever",
     "PresetLibrary",
     "ProgressionLibrary",
     "ProgressionTemplate",
+    "RetrievalCandidate",
+    "RetrievalQuery",
     "RuleBasedArranger",
     "ScaleCatalog",
     "ShoutChorusGenerator",
@@ -292,8 +367,13 @@ __all__ = [
     "project_to_mapping",
     "save_project_json",
     "transpose_note",
+    "retrieval_query_from_context",
+    "retrieval_trace",
+    "retrieve_pattern",
+    "retrieve_patterns",
     "validate_export_package",
     "validate_project",
+    "validate_release_quality",
     "ValidationGate",
     "VelocityRange",
     "write_full_midi",

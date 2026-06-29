@@ -13,4 +13,5 @@ pythonpath = [
   "packages/dataset_tools",
   "packages/midi_models",
   "packages/model_backends",
+  "packages/training",
 ]

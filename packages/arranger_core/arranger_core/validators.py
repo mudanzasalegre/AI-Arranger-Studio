@@ -98,6 +98,9 @@ def validate_export_package(
         "validation_report_html",
         "midi_full",
         "musicxml_full",
+        "model_trace_json",
+        "session_readme",
+        "takes_manifest_json",
         "export_manifest",
     }
     available_kinds = {str(file_record.get("kind")) for file_record in files}

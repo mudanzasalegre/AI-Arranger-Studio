@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
+import zipfile
 from pathlib import Path
 
 from app.main import app
@@ -112,6 +114,93 @@ def test_ai_infill_empty_candidate_fails_validation_and_is_rejected(tmp_path, mo
     rejected = _artifact_records(tmp_path)[0]
     assert rejected["status"] == "rejected"
     assert rejected["metadata"]["rejection_reason"] == "validation_failed"
+
+
+def test_daw_ready_zip_contains_trace_and_excludes_pending_takes(tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_ARRANGER_API_STORAGE", str(tmp_path / "api-storage"))
+    client = TestClient(app)
+    project_id = "api-daw-export"
+    _generate_project(client, project_id, seed=505)
+
+    accepted_response = client.post(
+        f"/v1/projects/{project_id}/ai/infill",
+        json={
+            "backend": "mock_symbolic",
+            "track_id": "alto_sax",
+            "bars": [1],
+            "instruction": "bebop phrase, medium density",
+            "density": "medium",
+            "temperature": 0.85,
+            "seed": 5051,
+        },
+    )
+    assert accepted_response.status_code == 200
+    accepted_take_id = accepted_response.json()["take"]["take_id"]
+
+    accept_response = client.post(f"/v1/projects/{project_id}/takes/{accepted_take_id}/accept")
+    assert accept_response.status_code == 200
+    export_response = client.post(
+        f"/v1/projects/{project_id}/export",
+        json={"include_pdf": False},
+    )
+    assert export_response.status_code == 200
+
+    zip_response = client.get(f"/v1/projects/{project_id}/zip")
+    assert zip_response.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(zip_response.content)) as archive:
+        names = set(archive.namelist())
+        trace = json.loads(archive.read("model_trace.json").decode("utf-8"))
+        takes_manifest = json.loads(archive.read("takes_manifest.json").decode("utf-8"))
+
+    assert {
+        "arrangement_project.json",
+        "export_manifest.json",
+        "full_arrangement.mid",
+        "full_score.musicxml",
+        "model_trace.json",
+        "session_readme.md",
+        "takes_manifest.json",
+        "validation_report.html",
+    } <= names
+    assert not any(name.startswith(("takes/", "model_contexts/")) for name in names)
+    assert trace["model_artifacts"][0]["take_id"] == accepted_take_id
+    assert trace["model_artifacts"][0]["backend_id"] == "mock_symbolic"
+    assert trace["model_artifacts"][0]["track_id"] == "alto_sax"
+    assert trace["model_artifacts"][0]["bars"] == [1]
+    assert trace["model_artifacts"][0]["validation_result"] in {"pass", "pass_with_warnings"}
+    exported_take_ids = {take["take_id"] for take in takes_manifest["takes"]}
+    assert accepted_take_id in exported_take_ids
+    assert {take["status"] for take in takes_manifest["takes"]} == {"accepted"}
+
+
+def test_pending_take_blocks_final_export(tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_ARRANGER_API_STORAGE", str(tmp_path / "api-storage"))
+    client = TestClient(app)
+    project_id = "api-daw-pending-block"
+    _generate_project(client, project_id, seed=506)
+
+    pending_response = client.post(
+        f"/v1/projects/{project_id}/ai/infill",
+        json={
+            "backend": "mock_symbolic",
+            "track_id": "piano",
+            "bars": [2],
+            "instruction": "short comping answer",
+            "density": "medium",
+            "temperature": 0.85,
+            "seed": 5061,
+        },
+    )
+    assert pending_response.status_code == 200
+
+    export_response = client.post(
+        f"/v1/projects/{project_id}/export",
+        json={"include_pdf": False},
+    )
+
+    assert export_response.status_code == 422
+    errors = export_response.json()["detail"]["errors"]
+    assert any(issue["code"] == "pending_take_present" for issue in errors)
 
 
 def test_ai_infill_midigpt_missing_dependency_is_controlled(

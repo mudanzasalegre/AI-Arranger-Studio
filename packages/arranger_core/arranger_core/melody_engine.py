@@ -9,6 +9,7 @@ from arranger_core.catalogs import InstrumentCatalog
 from arranger_core.chords import ChordParser, ParsedChord
 from arranger_core.lead_sheet import LeadSheetGenerator, MelodyRange
 from arranger_core.music_theory import midi_to_note, note_to_midi
+from arranger_core.retrieval import retrieval_trace, retrieve_patterns
 from arranger_core.schema import (
     ArrangementProject,
     Bar,
@@ -466,12 +467,17 @@ def _melody_mode(context: Any) -> MelodyEngineMode:
 
 
 def _melodic_patterns(context: Any) -> list[dict[str, Any]]:
-    patterns = context.learned_patterns.get("melodic_motifs", [])
     return [
         pattern
-        for pattern in patterns
-        if pattern.get("role") == "melody"
-        and isinstance(pattern.get("payload"), dict)
+        for pattern in retrieve_patterns(
+            context,
+            category="melodic_motifs",
+            role="melody",
+            instrument=str(context.spec.constraints.get("lead_instrument", "lead_instrument")),
+            density=context.spec.density,
+            limit=8,
+        )
+        if isinstance(pattern.get("payload"), dict)
     ]
 
 
@@ -524,6 +530,7 @@ def _retrieval_bar(
                     "learned_pattern_id": pattern.get("id"),
                     "retrieval_transform": "transpose_to_active_chord",
                     "retrieval_interval": interval,
+                    "retrieval_trace": retrieval_trace(pattern),
                 },
             )
         )
@@ -534,6 +541,7 @@ def _retrieval_bar(
         metadata={
             "melody_retrieval": True,
             "learned_pattern_id": pattern.get("id"),
+            "retrieval_trace": retrieval_trace(pattern),
         },
     )
 

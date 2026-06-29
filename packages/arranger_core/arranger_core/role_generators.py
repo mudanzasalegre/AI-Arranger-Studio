@@ -9,10 +9,12 @@ from typing import Any, Protocol
 from arranger_core.bass_engine import BassEngine
 from arranger_core.catalogs import InstrumentCatalog
 from arranger_core.chords import ChordParser, ParsedChord
+from arranger_core.drums_engine import DrumsEngine
 from arranger_core.harmony_engine import generate_harmony_project
 from arranger_core.melody_engine import MelodyAiInfillBackend, MelodyEngine
 from arranger_core.music_theory import midi_to_note, note_to_midi, pitch_class, pitch_class_name
 from arranger_core.performance import PerformanceMapper
+from arranger_core.piano_comping_engine import PianoCompingEngine
 from arranger_core.schema import (
     ArrangementProject,
     Bar,
@@ -70,8 +72,7 @@ class GenerationContext:
 class RoleGenerator(Protocol):
     role: str
 
-    def generate(self, context: GenerationContext) -> Track | list[Track]:
-        ...
+    def generate(self, context: GenerationContext) -> Track | list[Track]: ...
 
 
 class RuleBasedArranger:
@@ -80,18 +81,22 @@ class RuleBasedArranger:
         *,
         chord_parser: ChordParser | None = None,
         instrument_catalog: InstrumentCatalog | None = None,
+        drums_generator: RoleGenerator | None = None,
         bass_generator: RoleGenerator | None = None,
+        piano_generator: RoleGenerator | None = None,
+        melody_generator: RoleGenerator | None = None,
+        horn_response_generator: RoleGenerator | None = None,
     ) -> None:
         self.chord_parser = chord_parser or ChordParser.load_default()
         self.instrument_catalog = instrument_catalog or InstrumentCatalog.load_default()
-        self.drums = DrumsGenerator()
+        self.drums = drums_generator or DrumsGenerator()
         self.bass = bass_generator or WalkingBassGenerator()
-        self.piano = PianoCompingGenerator()
-        self.melody = MelodyGenerator(
+        self.piano = piano_generator or PianoCompingGenerator()
+        self.melody = melody_generator or MelodyGenerator(
             chord_parser=self.chord_parser,
             instrument_catalog=self.instrument_catalog,
         )
-        self.horn_response = HornResponseGenerator()
+        self.horn_response = horn_response_generator or HornResponseGenerator()
         self.shout = ShoutChorusGenerator()
         self.humanizer = Humanizer()
 
@@ -138,8 +143,7 @@ class RuleBasedArranger:
         response_instruments = [
             instrument_id
             for instrument_id in instrument_ids
-            if _is_horn(instrument_id, self.instrument_catalog)
-            and instrument_id != lead_instrument
+            if _is_horn(instrument_id, self.instrument_catalog) and instrument_id != lead_instrument
         ]
         for harmony_index, instrument_id in enumerate(response_instruments, start=1):
             horn_tracks.append(
@@ -180,42 +184,11 @@ class RuleBasedArranger:
 class DrumsGenerator:
     role = "drums"
 
+    def __init__(self, *, engine: DrumsEngine | None = None) -> None:
+        self.engine = engine or DrumsEngine()
+
     def generate(self, context: GenerationContext) -> Track:
-        learned_pattern = _select_learned_pattern(context, "drum_grooves", role="drums")
-        bars = []
-        for bar_number in range(1, context.project.bar_count + 1):
-            is_fill = _is_fill_bar(context.project, bar_number)
-            bar_duration = _bar_duration(context.project, bar_number)
-            bars.append(
-                Bar(
-                    number=bar_number,
-                    events=self._bar_events(
-                        bar_number,
-                        is_fill=is_fill,
-                        learned_pattern=learned_pattern,
-                        context=context,
-                        bar_duration=bar_duration,
-                    ),
-                    metadata={
-                        "fill": is_fill,
-                        "feel": _style_feel(context.spec),
-                        "learned_pattern_id": learned_pattern.get("id")
-                        if learned_pattern
-                        else None,
-                    },
-                )
-            )
-        return Track(
-            id="drum_kit",
-            instrument="drum_kit",
-            role=self.role,
-            bars=bars,
-            metadata={
-                "generator": "DrumsGenerator",
-                "groove": _style_feel(context.spec),
-                "learned_pattern_id": learned_pattern.get("id") if learned_pattern else None,
-            },
-        )
+        return self.engine.generate(context)
 
     def _bar_events(
         self,
@@ -283,69 +256,11 @@ class WalkingBassGenerator:
 class PianoCompingGenerator:
     role = "comping"
 
+    def __init__(self, *, engine: PianoCompingEngine | None = None) -> None:
+        self.engine = engine or PianoCompingEngine()
+
     def generate(self, context: GenerationContext) -> Track:
-        chords_by_bar = context.chords_by_bar
-        learned_pattern = _select_learned_pattern(context, "piano_voicings", role="comping")
-        bars: list[Bar] = []
-        for bar_number in range(1, context.project.bar_count + 1):
-            chord = _active_chord(chords_by_bar, bar_number, 0.0)
-            chord_info = _parse_chord(context.chord_parser, chord.symbol)
-            bar_duration = _bar_duration(context.project, bar_number)
-            rhythm = _comping_rhythm(
-                bar_number,
-                context.spec.density,
-                style=context.spec.style,
-                bar_duration=bar_duration,
-            )
-            note_events: list[NoteEvent] = []
-            for start in rhythm:
-                duration = min(0.75, bar_duration - start)
-                learned_voicing = (
-                    _rootless_voicing_from_pattern(
-                        chord_info,
-                        learned_pattern,
-                        anchor_midi=62,
-                    )
-                    if learned_pattern
-                    else []
-                )
-                voicing = learned_voicing or _rootless_voicing(chord_info, anchor_midi=62)
-                for pitch in voicing:
-                    note_events.append(
-                        NoteEvent(
-                            pitch=pitch,
-                            start=start,
-                            duration=duration,
-                            velocity=66,
-                            articulations=["tenuto"],
-                            annotations={
-                                "voicing": "rootless",
-                                "source_chord": chord.symbol,
-                                "root_pc": chord_info.root_pc,
-                                "learned_pattern_id": learned_pattern.get("id")
-                                if learned_pattern
-                                else None,
-                            },
-                        )
-                    )
-            bars.append(
-                Bar(
-                    number=bar_number,
-                    events=_with_rests(note_events, bar_duration, voice=1),
-                    metadata={"comping_rhythm": rhythm},
-                )
-            )
-        return Track(
-            id="piano",
-            instrument="piano",
-            role=self.role,
-            bars=bars,
-            metadata={
-                "generator": "PianoCompingGenerator",
-                "voicing": "rootless",
-                "learned_pattern_id": learned_pattern.get("id") if learned_pattern else None,
-            },
-        )
+        return self.engine.generate(context)
 
 
 class MelodyGenerator:
@@ -498,7 +413,13 @@ def generate_arrangement(
 
 
 def _arranger_name(arranger: RuleBasedArranger) -> str:
-    generators = (arranger.drums, arranger.bass, arranger.piano, arranger.melody)
+    generators = (
+        arranger.drums,
+        arranger.bass,
+        arranger.piano,
+        arranger.melody,
+        arranger.horn_response,
+    )
     return (
         "hybrid_rule_model_v0"
         if any(hasattr(generator, "backend") for generator in generators)
@@ -563,10 +484,7 @@ def _merge_melody_into_piano(piano_track: Track, melody_track: Track) -> Track:
         if melody_bar is None:
             bars.append(bar)
             continue
-        melody_events = [
-            event.model_copy(update={"voice": 2})
-            for event in melody_bar.events
-        ]
+        melody_events = [event.model_copy(update={"voice": 2}) for event in melody_bar.events]
         bars.append(
             bar.model_copy(
                 update={
@@ -949,9 +867,7 @@ def _parse_chord(parser: ChordParser, symbol: str) -> ChordInfo:
 
 def _guide_tones(parsed: ParsedChord) -> tuple[int, ...]:
     intervals = [
-        interval
-        for interval in parsed.chord_tone_intervals
-        if interval % 12 in {3, 4, 10, 11}
+        interval for interval in parsed.chord_tone_intervals if interval % 12 in {3, 4, 10, 11}
     ]
     return tuple((parsed.root_pc + interval) % 12 for interval in intervals)
 
@@ -1089,9 +1005,7 @@ def _select_learned_pattern(
         return None
 
     style_matches = [
-        pattern
-        for pattern in candidates
-        if pattern.get("style") in {context.spec.style, "unknown"}
+        pattern for pattern in candidates if pattern.get("style") in {context.spec.style, "unknown"}
     ]
     selected_pool = style_matches or candidates
     return selected_pool[context.spec.seed % len(selected_pool)]

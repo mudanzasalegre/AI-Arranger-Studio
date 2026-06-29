@@ -10,6 +10,7 @@ type ViewId =
   | "mixer"
   | "form"
   | "validation"
+  | "ai"
   | "datasets"
   | "export";
 
@@ -110,6 +111,88 @@ type PatternRecord = {
   payload: Record<string, unknown>;
 };
 
+type TakeRecord = {
+  take_id: string;
+  parent_take_id?: string | null;
+  source: string;
+  backend_id?: string | null;
+  task?: string | null;
+  track_id?: string | null;
+  bars: number[];
+  instruction?: string | null;
+  seed?: number | null;
+  status: "pending" | "accepted" | "rejected";
+  created_at: string;
+  updated_at?: string | null;
+  metadata: Record<string, unknown>;
+};
+
+type TakesResponse = {
+  active_take_id?: string | null;
+  count: number;
+  takes: TakeRecord[];
+};
+
+type TakeDiffResponse = {
+  take_id: string;
+  status: string;
+  active_take_id?: string | null;
+  take: TakeRecord;
+  summary: {
+    changed_tracks: number;
+    changed_bars: number;
+    active_note_count: number;
+    candidate_note_count: number;
+  };
+  tracks: {
+    track_id: string;
+    status: string;
+    changed_bars: number[];
+    active_note_count: number;
+    candidate_note_count: number;
+    note_delta?: number;
+  }[];
+  changed_bars: {
+    track_id: string;
+    bar: number;
+    active_note_count: number;
+    candidate_note_count: number;
+    note_delta: number;
+  }[];
+  validation?: ValidationReport;
+};
+
+type AiPlanResponse = {
+  status: string;
+  planner: string;
+  plan_version: string;
+  song_plan_patch: Record<string, unknown>;
+  song_plan: Record<string, unknown>;
+  validation: ValidationReport;
+  fallback_used: boolean;
+};
+
+type AiInfillResponse = {
+  status: string;
+  backend: string;
+  take: TakeRecord;
+  validation: ValidationReport;
+};
+
+type SketchResponse = {
+  status: string;
+  sketch_id: string;
+  project_id: string;
+  backend: string;
+  sketch: {
+    bar_count: number;
+    tracks: TrackSummary[];
+    uncertainty_reasons?: string[];
+    limitations?: string[];
+  };
+  validation: ValidationReport;
+};
+
 type ChordEntry = {
   symbol: string;
   bar?: number;
@@ -191,6 +274,7 @@ const views: { id: ViewId; label: string }[] = [
   { id: "mixer", label: "Mixer" },
   { id: "form", label: "Chord/form" },
   { id: "validation", label: "Validation" },
+  { id: "ai", label: "AI workflow" },
   { id: "datasets", label: "Datasets" },
   { id: "export", label: "Export" },
 ];
@@ -223,6 +307,28 @@ export default function Home() {
   const [patternRole, setPatternRole] = useState("walking_bass");
   const [patterns, setPatterns] = useState<PatternRecord[]>([]);
   const [localChords, setLocalChords] = useState<ChordEntry[]>([]);
+  const [aiPlanPrompt, setAiPlanPrompt] = useState(
+    "Make the next plan more spacious, with stronger call-and-response and clear section energy.",
+  );
+  const [aiPlan, setAiPlan] = useState<AiPlanResponse | null>(null);
+  const [aiBackend, setAiBackend] = useState("mock_symbolic");
+  const [aiTrackId, setAiTrackId] = useState("alto_sax");
+  const [aiBars, setAiBars] = useState("1,2,3,4");
+  const [aiInstruction, setAiInstruction] = useState(
+    "bebop phrase, medium density, clear resolution into the next bar",
+  );
+  const [aiDensity, setAiDensity] = useState("medium");
+  const [aiTemperature, setAiTemperature] = useState(0.85);
+  const [aiLockedTracks, setAiLockedTracks] = useState("");
+  const [takes, setTakes] = useState<TakeRecord[]>([]);
+  const [activeTakeId, setActiveTakeId] = useState("");
+  const [selectedTakeId, setSelectedTakeId] = useState("");
+  const [takeDiff, setTakeDiff] = useState<TakeDiffResponse | null>(null);
+  const [sketchPrompt, setSketchPrompt] = useState(
+    "Hard bop minor blues in C minor, 132 BPM, jazz sextet with walking bass and alto lead.",
+  );
+  const [sketchResult, setSketchResult] = useState<SketchResponse | null>(null);
+  const [workflowState, setWorkflowState] = useState("idle");
 
   const selectedProjectId = projectId || project?.project_id || "";
   const scoreRef = useRef<HTMLDivElement | null>(null);
@@ -253,6 +359,16 @@ export default function Home() {
   useEffect(() => {
     setLocalChords(projectJson.chord_grid ?? []);
   }, [projectJson]);
+
+  useEffect(() => {
+    const tracks = project?.project.tracks ?? [];
+    if (!tracks.length) {
+      return;
+    }
+    if (!tracks.some((track) => track.id === aiTrackId)) {
+      setAiTrackId(tracks[0].id);
+    }
+  }, [aiTrackId, project]);
 
   useEffect(() => {
     if (!musicXml || activeView !== "score" || scoreRef.current === null) {
@@ -344,6 +460,7 @@ export default function Home() {
     setProjectId(loaded.project_id);
     setValidation(loaded.validation ?? {});
     setFiles(loaded.export_manifest?.files ?? []);
+    await loadTakes(loaded.project_id);
   }
 
   async function loadProjectArtifacts(id = selectedProjectId) {
@@ -409,6 +526,190 @@ export default function Home() {
       setActiveView("validation");
       setMessage("Validation refreshed");
     } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadTakes(id = selectedProjectId) {
+    if (!id) {
+      return;
+    }
+    try {
+      const payload = await requestJson<TakesResponse>(
+        `/v1/projects/${encodeURIComponent(id)}/takes`,
+      );
+      setTakes(payload.takes);
+      setActiveTakeId(payload.active_take_id ?? "");
+      setSelectedTakeId((current) =>
+        payload.takes.some((take) => take.take_id === current)
+          ? current
+          : payload.active_take_id || payload.takes[0]?.take_id || "",
+      );
+    } catch {
+      setTakes([]);
+      setActiveTakeId("");
+    }
+  }
+
+  async function planWithAi() {
+    if (!selectedProjectId) {
+      return;
+    }
+    setBusy(true);
+    setWorkflowState("generating");
+    setMessage("Planning with AI");
+    try {
+      const result = await requestJson<AiPlanResponse>(
+        `/v1/projects/${encodeURIComponent(selectedProjectId)}/ai/plan`,
+        {
+          method: "POST",
+          body: JSON.stringify({ prompt: aiPlanPrompt, seed }),
+        },
+      );
+      setAiPlan(result);
+      await loadProject(selectedProjectId);
+      setWorkflowState(result.fallback_used ? "fallback_used" : "accepted");
+      setMessage("AI plan saved");
+    } catch (error) {
+      setWorkflowState("error");
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function aiInfillProject({ fullTrack = false }: { fullTrack?: boolean } = {}) {
+    if (!selectedProjectId || !aiTrackId) {
+      return;
+    }
+    setBusy(true);
+    setWorkflowState("generating");
+    setMessage(fullTrack ? "Generating track take" : "Generating infill take");
+    try {
+      const barNumbers = fullTrack
+        ? Array.from({ length: project?.project.bar_count ?? 0 }, (_, index) => index + 1)
+        : parseBars(aiBars);
+      const response = await requestJson<AiInfillResponse>(
+        `/v1/projects/${encodeURIComponent(selectedProjectId)}/ai/infill`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            backend: aiBackend,
+            track_id: aiTrackId,
+            bars: barNumbers,
+            instruction: aiInstruction,
+            density: aiDensity,
+            temperature: aiTemperature,
+            seed,
+            locked_tracks: parseCsv(aiLockedTracks),
+          }),
+        },
+      );
+      setValidation(response.validation);
+      setSelectedTakeId(response.take.take_id);
+      await loadTakes(selectedProjectId);
+      await loadTakeDiff(response.take.take_id);
+      setWorkflowState("pending_review");
+      setMessage("Take pending review");
+    } catch (error) {
+      setWorkflowState("error");
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadTakeDiff(takeId = selectedTakeId) {
+    if (!selectedProjectId || !takeId) {
+      return;
+    }
+    setBusy(true);
+    setMessage("Loading take diff");
+    try {
+      const diff = await requestJson<TakeDiffResponse>(
+        `/v1/projects/${encodeURIComponent(selectedProjectId)}/takes/${encodeURIComponent(takeId)}/diff`,
+      );
+      setSelectedTakeId(takeId);
+      setTakeDiff(diff);
+      setValidation(diff.validation ?? validation);
+      setWorkflowState("pending_review");
+      setMessage("Take diff ready");
+    } catch (error) {
+      setWorkflowState("error");
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acceptTake(takeId = selectedTakeId) {
+    if (!selectedProjectId || !takeId) {
+      return;
+    }
+    setBusy(true);
+    setWorkflowState("accepted");
+    setMessage("Accepting take");
+    try {
+      const response = await requestJson<{ validation: ValidationReport }>(
+        `/v1/projects/${encodeURIComponent(selectedProjectId)}/takes/${encodeURIComponent(takeId)}/accept`,
+        { method: "POST" },
+      );
+      setValidation(response.validation);
+      setTakeDiff(null);
+      await loadProject(selectedProjectId);
+      await loadProjectArtifacts(selectedProjectId);
+      setMessage("Take accepted");
+    } catch (error) {
+      setWorkflowState("error");
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rejectTake(takeId = selectedTakeId) {
+    if (!selectedProjectId || !takeId) {
+      return;
+    }
+    setBusy(true);
+    setWorkflowState("rejected");
+    setMessage("Rejecting take");
+    try {
+      await requestJson(
+        `/v1/projects/${encodeURIComponent(selectedProjectId)}/takes/${encodeURIComponent(takeId)}/reject`,
+        { method: "POST" },
+      );
+      setTakeDiff(null);
+      await loadTakes(selectedProjectId);
+      setMessage("Take rejected");
+    } catch (error) {
+      setWorkflowState("error");
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createSketch() {
+    setBusy(true);
+    setWorkflowState("generating");
+    setMessage("Generating sketch");
+    try {
+      const response = await requestJson<SketchResponse>("/v1/ai/text-to-midi-sketch", {
+        method: "POST",
+        body: JSON.stringify({
+          backend: aiBackend,
+          prompt: sketchPrompt,
+          seed,
+        }),
+      });
+      setSketchResult(response);
+      setWorkflowState("pending_review");
+      setMessage("Sketch generated");
+    } catch (error) {
+      setWorkflowState("error");
       setMessage(errorMessage(error));
     } finally {
       setBusy(false);
@@ -654,6 +955,46 @@ export default function Home() {
           issues={validationIssues}
           refreshValidation={refreshValidation}
           validation={validation}
+        />
+      ) : null}
+
+      {activeView === "ai" ? (
+        <AIWorkflowView
+          acceptTake={acceptTake}
+          activeTakeId={activeTakeId}
+          aiBackend={aiBackend}
+          aiBars={aiBars}
+          aiDensity={aiDensity}
+          aiInfillProject={aiInfillProject}
+          aiInstruction={aiInstruction}
+          aiLockedTracks={aiLockedTracks}
+          aiPlan={aiPlan}
+          aiPlanPrompt={aiPlanPrompt}
+          aiTemperature={aiTemperature}
+          aiTrackId={aiTrackId}
+          busy={busy}
+          createSketch={createSketch}
+          loadTakeDiff={loadTakeDiff}
+          planWithAi={planWithAi}
+          project={project}
+          rejectTake={rejectTake}
+          selectedTakeId={selectedTakeId}
+          setAiBackend={setAiBackend}
+          setAiBars={setAiBars}
+          setAiDensity={setAiDensity}
+          setAiInstruction={setAiInstruction}
+          setAiLockedTracks={setAiLockedTracks}
+          setAiPlanPrompt={setAiPlanPrompt}
+          setAiTemperature={setAiTemperature}
+          setAiTrackId={setAiTrackId}
+          setSelectedTakeId={setSelectedTakeId}
+          setSketchPrompt={setSketchPrompt}
+          sketchPrompt={sketchPrompt}
+          sketchResult={sketchResult}
+          takeDiff={takeDiff}
+          takes={takes}
+          validation={validation}
+          workflowState={workflowState}
         />
       ) : null}
 
@@ -1063,6 +1404,411 @@ function ValidationView({
   );
 }
 
+type AIWorkflowViewProps = {
+  acceptTake: (takeId?: string) => Promise<void>;
+  activeTakeId: string;
+  aiBackend: string;
+  aiBars: string;
+  aiDensity: string;
+  aiInfillProject: (options?: { fullTrack?: boolean }) => Promise<void>;
+  aiInstruction: string;
+  aiLockedTracks: string;
+  aiPlan: AiPlanResponse | null;
+  aiPlanPrompt: string;
+  aiTemperature: number;
+  aiTrackId: string;
+  busy: boolean;
+  createSketch: () => Promise<void>;
+  loadTakeDiff: (takeId?: string) => Promise<void>;
+  planWithAi: () => Promise<void>;
+  project: ProjectResponse | null;
+  rejectTake: (takeId?: string) => Promise<void>;
+  selectedTakeId: string;
+  setAiBackend: (value: string) => void;
+  setAiBars: (value: string) => void;
+  setAiDensity: (value: string) => void;
+  setAiInstruction: (value: string) => void;
+  setAiLockedTracks: (value: string) => void;
+  setAiPlanPrompt: (value: string) => void;
+  setAiTemperature: (value: number) => void;
+  setAiTrackId: (value: string) => void;
+  setSelectedTakeId: (value: string) => void;
+  setSketchPrompt: (value: string) => void;
+  sketchPrompt: string;
+  sketchResult: SketchResponse | null;
+  takeDiff: TakeDiffResponse | null;
+  takes: TakeRecord[];
+  validation: ValidationReport;
+  workflowState: string;
+};
+
+function AIWorkflowView({
+  acceptTake,
+  activeTakeId,
+  aiBackend,
+  aiBars,
+  aiDensity,
+  aiInfillProject,
+  aiInstruction,
+  aiLockedTracks,
+  aiPlan,
+  aiPlanPrompt,
+  aiTemperature,
+  aiTrackId,
+  busy,
+  createSketch,
+  loadTakeDiff,
+  planWithAi,
+  project,
+  rejectTake,
+  selectedTakeId,
+  setAiBackend,
+  setAiBars,
+  setAiDensity,
+  setAiInstruction,
+  setAiLockedTracks,
+  setAiPlanPrompt,
+  setAiTemperature,
+  setAiTrackId,
+  setSelectedTakeId,
+  setSketchPrompt,
+  sketchPrompt,
+  sketchResult,
+  takeDiff,
+  takes,
+  validation,
+  workflowState,
+}: AIWorkflowViewProps) {
+  const tracks = project?.project.tracks ?? [];
+  const projectId = project?.project_id ?? "";
+  const selectedTake = takes.find((take) => take.take_id === selectedTakeId) ?? null;
+  const diffValidation = takeDiff?.validation ?? validation;
+  const diffIssues = [...(diffValidation.errors ?? []), ...(diffValidation.warnings ?? [])];
+  const validationSummary = validationCount(diffValidation);
+  const changedTracks = takeDiff?.tracks.filter((track) => track.status !== "unchanged") ?? [];
+
+  return (
+    <section className="ai-workflow-grid">
+      <div className="command-panel">
+        <div className="panel-heading-row">
+          <div>
+            <p className="eyebrow">AI Plan</p>
+            <h2>Planner JSON</h2>
+          </div>
+          <span className={`workflow-state ${workflowState}`}>{workflowState}</span>
+        </div>
+        <textarea
+          aria-label="AI plan prompt"
+          className="compact-textarea"
+          onChange={(event) => setAiPlanPrompt(event.target.value)}
+          value={aiPlanPrompt}
+        />
+        <div className="button-row">
+          <button disabled={busy || !project} onClick={() => void planWithAi()} type="button">
+            Plan
+          </button>
+        </div>
+        <div className="mini-grid">
+          <Metric label="Version" value={aiPlan?.plan_version ?? "-"} />
+          <Metric label="Planner" value={aiPlan?.planner ?? "-"} />
+          <Metric label="Fallback" value={aiPlan ? String(aiPlan.fallback_used) : "-"} />
+          <Metric label="Validation" value={aiPlan?.validation.status ?? "-"} />
+        </div>
+        <pre className="json-preview">{jsonPreview(aiPlan?.song_plan_patch ?? {})}</pre>
+      </div>
+
+      <div className="command-panel">
+        <p className="eyebrow">AI Infill</p>
+        <h2>Targeted generation</h2>
+        <div className="form-stack two-column-form">
+          <label>
+            <span>Backend</span>
+            <select onChange={(event) => setAiBackend(event.target.value)} value={aiBackend}>
+              <option value="mock_symbolic">mock_symbolic</option>
+              <option value="midigpt">midigpt</option>
+              <option value="text2midi">text2midi</option>
+            </select>
+          </label>
+          <label>
+            <span>Track</span>
+            <select onChange={(event) => setAiTrackId(event.target.value)} value={aiTrackId}>
+              {tracks.map((track) => (
+                <option key={track.id} value={track.id}>
+                  {track.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Bars</span>
+            <input onChange={(event) => setAiBars(event.target.value)} value={aiBars} />
+          </label>
+          <label>
+            <span>Density</span>
+            <select onChange={(event) => setAiDensity(event.target.value)} value={aiDensity}>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+          </label>
+          <label>
+            <span>Temperature</span>
+            <input
+              max={1.5}
+              min={0}
+              onChange={(event) => setAiTemperature(Number(event.target.value || 0))}
+              step={0.01}
+              type="number"
+              value={aiTemperature}
+            />
+          </label>
+          <label>
+            <span>Locked tracks</span>
+            <input
+              onChange={(event) => setAiLockedTracks(event.target.value)}
+              value={aiLockedTracks}
+            />
+          </label>
+        </div>
+        <textarea
+          aria-label="AI infill instruction"
+          className="compact-textarea"
+          onChange={(event) => setAiInstruction(event.target.value)}
+          value={aiInstruction}
+        />
+        <div className="button-row">
+          <button disabled={busy || !project} onClick={() => void aiInfillProject()} type="button">
+            AI Infill
+          </button>
+          <button
+            className="secondary-button"
+            disabled={busy || !project}
+            onClick={() => void aiInfillProject({ fullTrack: true })}
+            type="button"
+          >
+            Generate Track
+          </button>
+        </div>
+      </div>
+
+      <div className="data-panel">
+        <div className="panel-heading-row">
+          <div>
+            <p className="eyebrow">Takes Panel</p>
+            <h2>{takes.length} takes</h2>
+          </div>
+          <Metric label="Active" value={activeTakeId || "-"} />
+        </div>
+        <div className="take-list">
+          {takes.length ? (
+            takes.map((take) => {
+              const isActive = take.take_id === activeTakeId;
+              const canAccept = take.status !== "rejected" && !isActive;
+              const canReject = take.status === "pending" && !isActive;
+              return (
+                <div
+                  className={take.take_id === selectedTakeId ? "take-row selected" : "take-row"}
+                  key={take.take_id}
+                >
+                  <button
+                    className="take-select"
+                    onClick={() => {
+                      setSelectedTakeId(take.take_id);
+                      void loadTakeDiff(take.take_id);
+                    }}
+                    type="button"
+                  >
+                    <strong>{take.take_id}</strong>
+                    <span>{take.status}</span>
+                    <span>{take.backend_id ?? take.source}</span>
+                    <span>{take.track_id ?? "-"}</span>
+                    <span>{formatBars(take.bars)}</span>
+                  </button>
+                  <div className="take-actions">
+                    <button
+                      className="secondary-button"
+                      disabled={busy}
+                      onClick={() => void loadTakeDiff(take.take_id)}
+                      type="button"
+                    >
+                      Diff
+                    </button>
+                    <button
+                      disabled={busy || !canAccept}
+                      onClick={() => void acceptTake(take.take_id)}
+                      type="button"
+                    >
+                      {take.status === "accepted" ? "Restore" : "Accept"}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      disabled={busy || !canReject}
+                      onClick={() => void rejectTake(take.take_id)}
+                      type="button"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="empty-state">No takes</div>
+          )}
+        </div>
+        {selectedTake ? (
+          <div className="selected-take">
+            <strong>{selectedTake.take_id}</strong>
+            <span>{selectedTake.instruction ?? selectedTake.task ?? selectedTake.source}</span>
+            <div className="button-row">
+              <a
+                className="link-button secondary-button"
+                href={takeFileUrl(projectId, selectedTake.take_id, "midi")}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Preview MIDI
+              </a>
+              <a
+                className="link-button secondary-button"
+                href={takeFileUrl(projectId, selectedTake.take_id, "project")}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Project JSON
+              </a>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="data-panel">
+        <div className="panel-heading-row">
+          <div>
+            <p className="eyebrow">Validation Diff</p>
+            <h2>{takeDiff?.status ?? "No diff loaded"}</h2>
+          </div>
+          <span className={`status-strip ${diffValidation.status ?? ""}`}>
+            {diffValidation.status ?? "-"}
+          </span>
+        </div>
+        <div className="mini-grid">
+          <Metric label="Changed tracks" value={takeDiff?.summary.changed_tracks ?? "-"} />
+          <Metric label="Changed bars" value={takeDiff?.summary.changed_bars ?? "-"} />
+          <Metric label="Errors" value={validationSummary.errors} />
+          <Metric label="Warnings" value={validationSummary.warnings} />
+        </div>
+        <div className="diff-table">
+          <div className="table-row header-row">
+            <span>Track</span>
+            <span>Status</span>
+            <span>Bars</span>
+            <span>Notes</span>
+          </div>
+          {changedTracks.length ? (
+            changedTracks.map((track) => (
+              <div className="table-row" key={track.track_id}>
+                <span>{track.track_id}</span>
+                <span>{track.status}</span>
+                <span>{formatBars(track.changed_bars)}</span>
+                <span>{track.note_delta ?? 0}</span>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">No changed tracks</div>
+          )}
+        </div>
+        <div className="diff-table">
+          <div className="table-row header-row">
+            <span>Track</span>
+            <span>Bar</span>
+            <span>Before</span>
+            <span>After</span>
+          </div>
+          {takeDiff?.changed_bars.length ? (
+            takeDiff.changed_bars.map((bar) => (
+              <div className="table-row" key={`${bar.track_id}-${bar.bar}`}>
+                <span>{bar.track_id}</span>
+                <span>{bar.bar}</span>
+                <span>{bar.active_note_count}</span>
+                <span>{bar.candidate_note_count}</span>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">No changed bars</div>
+          )}
+        </div>
+        <div className="issue-table compact-issue-table">
+          <div className="table-row header-row">
+            <span>Severity</span>
+            <span>Validator</span>
+            <span>Track</span>
+            <span>Bar</span>
+            <span>Message</span>
+          </div>
+          {diffIssues.length ? (
+            diffIssues.map((issue, index) => (
+              <div className="table-row" key={`${issue.code}-${index}`}>
+                <span className={issue.severity}>{issue.severity}</span>
+                <span>{issue.validator}</span>
+                <span>{issue.track_id ?? "-"}</span>
+                <span>{issue.bar_number ?? "-"}</span>
+                <span>{issue.message}</span>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">No validation issues</div>
+          )}
+        </div>
+      </div>
+
+      <div className="data-panel wide-ai-panel">
+        <div className="panel-heading-row">
+          <div>
+            <p className="eyebrow">AI Sketch</p>
+            <h2>Text-to-MIDI workspace</h2>
+          </div>
+          <button disabled={busy} onClick={() => void createSketch()} type="button">
+            Generate Sketch
+          </button>
+        </div>
+        <textarea
+          aria-label="AI sketch prompt"
+          className="compact-textarea"
+          onChange={(event) => setSketchPrompt(event.target.value)}
+          value={sketchPrompt}
+        />
+        <div className="mini-grid">
+          <Metric label="Status" value={sketchResult?.status ?? "-"} />
+          <Metric label="Backend" value={sketchResult?.backend ?? "-"} />
+          <Metric label="Bars" value={sketchResult?.sketch.bar_count ?? "-"} />
+          <Metric label="Validation" value={sketchResult?.validation.status ?? "-"} />
+        </div>
+        <div className="track-table">
+          <div className="table-row header-row">
+            <span>Track</span>
+            <span>Instrument</span>
+            <span>Role</span>
+            <span>Bars</span>
+          </div>
+          {sketchResult?.sketch.tracks.length ? (
+            sketchResult.sketch.tracks.map((track) => (
+              <div className="table-row" key={track.id}>
+                <span>{track.id}</span>
+                <span>{track.instrument}</span>
+                <span>{track.role}</span>
+                <span>{track.bars}</span>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">No sketch</div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function DatasetsView({
   datasetId,
   datasetLicense,
@@ -1342,8 +2088,50 @@ function fileUrl(projectId: string, kind: string, trackId?: string): string {
   return `${API_BASE}/v1/projects/${encodeURIComponent(projectId)}/file?${params.toString()}`;
 }
 
+function takeFileUrl(projectId: string, takeId: string, kind: string): string {
+  const params = new URLSearchParams({ kind });
+  return `${API_BASE}/v1/projects/${encodeURIComponent(projectId)}/takes/${encodeURIComponent(
+    takeId,
+  )}/file?${params.toString()}`;
+}
+
 function zipUrl(projectId: string): string {
   return `${API_BASE}/v1/projects/${encodeURIComponent(projectId)}/zip`;
+}
+
+function parseCsv(value: string): string[] {
+  return value
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseBars(value: string): number[] {
+  return Array.from(
+    new Set(
+      parseCsv(value)
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item > 0),
+    ),
+  ).sort((left, right) => left - right);
+}
+
+function formatBars(bars: number[] | undefined): string {
+  if (!bars?.length) {
+    return "-";
+  }
+  return bars.join(",");
+}
+
+function validationCount(report?: ValidationReport): { errors: number; warnings: number } {
+  return {
+    errors: report?.errors?.length ?? 0,
+    warnings: report?.warnings?.length ?? 0,
+  };
+}
+
+function jsonPreview(value: unknown): string {
+  return JSON.stringify(value ?? {}, null, 2);
 }
 
 function errorMessage(error: unknown): string {

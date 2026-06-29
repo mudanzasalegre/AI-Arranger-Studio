@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from app.main import app
-from arranger_core import ArrangementProject, TakeManager
+from arranger_core import ArrangementProject, NoteEvent, TakeManager
 from arranger_core.takes.models import ModelArtifactRecord
 from fastapi.testclient import TestClient
 
@@ -41,6 +41,13 @@ def test_takes_endpoints_list_accept_reject_and_restore(tmp_path, monkeypatch):
         track_id="piano",
         bars=[1],
     )
+    diff_response = client.get(f"/v1/projects/{project_id}/takes/{rejected_take.take_id}/diff")
+    assert diff_response.status_code == 200
+    rejected_diff = diff_response.json()
+    assert rejected_diff["status"] == "diff_ready"
+    assert rejected_diff["summary"]["changed_tracks"] == 0
+    assert rejected_diff["validation"]["status"] == "pass"
+
     reject_response = client.post(f"/v1/projects/{project_id}/takes/{rejected_take.take_id}/reject")
     assert reject_response.status_code == 200
     assert reject_response.json()["take"]["status"] == "rejected"
@@ -50,6 +57,7 @@ def test_takes_endpoints_list_accept_reject_and_restore(tmp_path, monkeypatch):
 
     accepted_candidate = project.model_copy(deep=True)
     accepted_candidate.metadata["candidate_marker"] = "accept-api"
+    _change_first_piano_bar(accepted_candidate)
     accepted_take = manager.create_pending_take(
         base_project=project,
         candidate_project=accepted_candidate,
@@ -58,6 +66,21 @@ def test_takes_endpoints_list_accept_reject_and_restore(tmp_path, monkeypatch):
         track_id="piano",
         bars=[2],
     )
+    diff_response = client.get(f"/v1/projects/{project_id}/takes/{accepted_take.take_id}/diff")
+    assert diff_response.status_code == 200
+    diff = diff_response.json()
+    assert diff["summary"]["changed_tracks"] == 1
+    assert diff["summary"]["changed_bars"] == 1
+    piano_diff = next(item for item in diff["tracks"] if item["track_id"] == "piano")
+    assert piano_diff["status"] == "modified"
+    assert piano_diff["changed_bars"] == [1]
+    assert any(item["track_id"] == "piano" and item["bar"] == 1 for item in diff["changed_bars"])
+    preview_response = client.get(
+        f"/v1/projects/{project_id}/takes/{accepted_take.take_id}/file?kind=midi"
+    )
+    assert preview_response.status_code == 200
+    assert preview_response.content.startswith(b"MThd")
+
     accept_response = client.post(f"/v1/projects/{project_id}/takes/{accepted_take.take_id}/accept")
     assert accept_response.status_code == 200
     assert accept_response.json()["status"] == "accepted"
@@ -70,6 +93,13 @@ def test_takes_endpoints_list_accept_reject_and_restore(tmp_path, monkeypatch):
     restored = ArrangementProject.load_json(project_dir / "arrangement_project.json")
     assert restored.metadata.get("candidate_marker") is None
     assert restored.metadata["active_take_id"] == "take_base"
+
+
+def _change_first_piano_bar(project: ArrangementProject) -> None:
+    piano = next(track for track in project.tracks if track.id == "piano")
+    first_bar = piano.bars[0]
+    first_note = next(event for event in first_bar.events if isinstance(event, NoteEvent))
+    first_note.velocity = min(127, first_note.velocity + 9)
 
 
 def _record(artifact_id: str, project_id: str) -> ModelArtifactRecord:

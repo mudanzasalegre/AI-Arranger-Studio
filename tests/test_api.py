@@ -59,6 +59,8 @@ def test_openapi_contains_objective_10_paths():
     assert "/v1/projects/{project_id}" in paths
     assert "/v1/projects/{project_id}/export" in paths
     assert "/v1/projects/{project_id}/takes" in paths
+    assert "/v1/projects/{project_id}/takes/{take_id}/diff" in paths
+    assert "/v1/projects/{project_id}/takes/{take_id}/file" in paths
     assert "/v1/projects/{project_id}/takes/{take_id}/accept" in paths
     assert "/v1/projects/{project_id}/takes/{take_id}/reject" in paths
     assert "/v1/projects/{project_id}/ai/plan" in paths

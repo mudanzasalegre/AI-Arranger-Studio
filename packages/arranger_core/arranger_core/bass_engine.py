@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from arranger_core.chords import ChordParser, ParsedChord
 from arranger_core.music_theory import midi_to_note, note_to_midi, pitch_class, pitch_class_name
+from arranger_core.retrieval import retrieval_trace, retrieve_pattern
 from arranger_core.schema import (
     ArrangementProject,
     Bar,
@@ -724,20 +725,13 @@ def _bass_style(context: Any) -> BassLineStyle:
 
 
 def _select_pattern(context: Any, category: str, role: str) -> dict[str, Any] | None:
-    candidates = [
-        pattern
-        for pattern in context.learned_patterns.get(category, [])
-        if pattern.get("role") == role
-    ]
-    if not candidates:
-        return None
-    style_matches = [
-        pattern
-        for pattern in candidates
-        if pattern.get("style") in {context.spec.style, "unknown"}
-    ]
-    selected_pool = style_matches or candidates
-    return selected_pool[context.spec.seed % len(selected_pool)]
+    return retrieve_pattern(
+        context,
+        category=category,
+        role=role,
+        instrument="double_bass",
+        density=context.spec.density,
+    )
 
 
 def _build_ledger(
@@ -799,6 +793,7 @@ def _finalize_track(
                 "bass_validation": validation.model_dump(mode="json"),
                 "bass_line_ledger": ledger.model_dump(mode="json"),
                 "learned_pattern_id": source_pattern.get("id") if source_pattern else None,
+                "retrieval_trace": retrieval_trace(source_pattern),
                 "fallback_reason": fallback_reason,
                 "style": context.spec.style,
             }

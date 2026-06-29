@@ -32,6 +32,9 @@ DEMO_REQUIRED_RELATIVE_FILES = {
     "midi_tracks/piano.mid",
     "midi_tracks/trombone.mid",
     "midi_tracks/trumpet_bflat.mid",
+    "model_trace.json",
+    "session_readme.md",
+    "takes_manifest.json",
     "validation_report.html",
     "validation_report.json",
 }

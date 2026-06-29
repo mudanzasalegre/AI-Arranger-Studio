@@ -1,0 +1,8 @@
+[project]
+name = "arranger-training"
+version = "0.1.0"
+dependencies = ["dataset-tools", "pydantic"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

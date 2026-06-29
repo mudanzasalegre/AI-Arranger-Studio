@@ -17,6 +17,7 @@ from arranger_core import (
     export_project,
     generate_arrangement,
     validate_project,
+    write_full_midi,
     write_validation_html,
     write_validation_json,
 )
@@ -59,9 +60,12 @@ FILE_KIND_ALIASES = {
     "html": "validation_report_html",
     "manifest": "export_manifest",
     "midi": "midi_full",
+    "model_trace": "model_trace_json",
     "musicxml": "musicxml_full",
     "project": "project_json",
+    "readme": "session_readme",
     "score": "musicxml_full",
+    "takes_manifest": "takes_manifest_json",
     "validation": "validation_report_json",
 }
 
@@ -80,6 +84,7 @@ class GenerateOptions(ApiModel):
     run_validation: bool = Field(default=True, alias="validate")
     include_pdf: bool = False
     validation_policy: Literal["strict", "report_only"] = "strict"
+    export_mode: Literal["private", "commercial"] = "private"
 
 
 class ProjectGenerateRequest(ApiModel):
@@ -93,6 +98,7 @@ class ProjectGenerateRequest(ApiModel):
 class ProjectExportRequest(ApiModel):
     include_pdf: bool = False
     validation_policy: Literal["strict", "report_only"] = "strict"
+    export_mode: Literal["private", "commercial"] = "private"
 
 
 class RegenerateRequest(ApiModel):
@@ -165,6 +171,7 @@ def generate_project(payload: ProjectGenerateRequest) -> dict[str, Any]:
             project_dir,
             include_pdf=payload.options.include_pdf,
             validation_policy=payload.options.validation_policy,
+            export_mode=payload.options.export_mode,
         )
         project = _load_project(project_id)
         validation_report = project.validation_report
@@ -214,13 +221,20 @@ def get_project_file(
 
 @app.get("/v1/projects/{project_id}/zip")
 def get_project_zip(project_id: str) -> StreamingResponse:
-    _load_project(project_id)
+    project = _load_project(project_id)
     project_dir = _project_dir(project_id)
+    manifest = _read_json_file(project_dir / "export_manifest.json")
+    if not manifest:
+        manifest = _export_project(
+            project,
+            project_dir,
+            include_pdf=False,
+            validation_policy="strict",
+        )
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(project_dir.rglob("*")):
-            if path.is_file():
-                archive.write(path, path.relative_to(project_dir))
+        for path in _export_package_paths(project_dir, manifest):
+            archive.write(path, path.relative_to(project_dir).as_posix())
     buffer.seek(0)
     return StreamingResponse(
         buffer,
@@ -243,6 +257,7 @@ def export_existing_project(
         _project_dir(project_id),
         include_pdf=request.include_pdf,
         validation_policy=request.validation_policy,
+        export_mode=request.export_mode,
     )
     exported_project = _load_project(project_id)
     return {
@@ -269,6 +284,68 @@ def list_project_takes(project_id: str) -> dict[str, Any]:
     project = _load_project(project_id)
     manager = TakeManager(_project_dir(project_id))
     return manager.list_takes(project=project)
+
+
+@app.get("/v1/projects/{project_id}/takes/{take_id}/diff")
+def diff_project_take(project_id: str, take_id: str) -> dict[str, Any]:
+    take, snapshot_path, takes = _take_snapshot(project_id, take_id)
+    active_project = _load_project(project_id)
+    candidate_project = ArrangementProject.load_json(snapshot_path)
+    validation_path = take.get("metadata", {}).get("validation_report_path")
+    validation_report = (
+        _read_json_file(Path(validation_path))
+        if validation_path and Path(validation_path).exists()
+        else candidate_project.validation_report
+    )
+    diff = _project_diff(active_project, candidate_project)
+    return {
+        "project_id": project_id,
+        "take_id": take_id,
+        "status": "diff_ready",
+        "active_take_id": takes.get("active_take_id"),
+        "take": take,
+        "summary": diff["summary"],
+        "tracks": diff["tracks"],
+        "changed_bars": diff["changed_bars"],
+        "validation": validation_report,
+    }
+
+
+@app.get("/v1/projects/{project_id}/takes/{take_id}/file")
+def get_project_take_file(
+    project_id: str,
+    take_id: str,
+    kind: str = Query(default="midi"),
+) -> FileResponse:
+    take, snapshot_path, _takes = _take_snapshot(project_id, take_id)
+    normalized_kind = FILE_KIND_ALIASES.get(kind, kind)
+    if normalized_kind == "midi_full":
+        candidate_project = ArrangementProject.load_json(snapshot_path)
+        preview_dir = snapshot_path.parent / "preview"
+        preview_dir.mkdir(parents=True, exist_ok=True)
+        preview_path = preview_dir / "full_arrangement.mid"
+        write_full_midi(candidate_project, preview_path)
+        return FileResponse(
+            preview_path,
+            filename=f"{take_id}.mid",
+            media_type=_media_type_for_path(preview_path),
+        )
+    if normalized_kind == "project_json":
+        return FileResponse(
+            snapshot_path,
+            filename=f"{take_id}.arrangement_project.json",
+            media_type=_media_type_for_path(snapshot_path),
+        )
+    if normalized_kind == "validation_report_json":
+        validation_path = take.get("metadata", {}).get("validation_report_path")
+        if validation_path:
+            path = _existing_project_path(_project_dir(project_id), Path(validation_path))
+            return FileResponse(
+                path,
+                filename=f"{take_id}.validation_report.json",
+                media_type=_media_type_for_path(path),
+            )
+    raise HTTPException(status_code=404, detail=f"Take file not found for kind={kind!r}")
 
 
 @app.post("/v1/projects/{project_id}/takes/{take_id}/accept")
@@ -338,6 +415,7 @@ def regenerate_project(project_id: str, payload: RegenerateRequest) -> dict[str,
             project_dir,
             include_pdf=payload.options.include_pdf,
             validation_policy=payload.options.validation_policy,
+            export_mode=payload.options.export_mode,
         )
         project = _load_project(project_id)
         validation_report = project.validation_report
@@ -470,6 +548,7 @@ def _export_project(
     *,
     include_pdf: bool,
     validation_policy: Literal["strict", "report_only"],
+    export_mode: Literal["private", "commercial"] = "private",
 ) -> dict[str, Any]:
     try:
         return export_project(
@@ -477,6 +556,7 @@ def _export_project(
             output_dir,
             include_pdf=include_pdf,
             validation_policy=validation_policy,
+            export_mode=export_mode,
         )
     except MusicValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.report) from exc
@@ -524,6 +604,169 @@ def _project_metadata(project: ArrangementProject) -> dict[str, Any]:
             for track in project.tracks
         ],
     }
+
+
+def _take_snapshot(
+    project_id: str,
+    take_id: str,
+) -> tuple[dict[str, Any], Path, dict[str, Any]]:
+    active_project = _load_project(project_id)
+    project_dir = _project_dir(project_id)
+    manager = TakeManager(project_dir)
+    takes = manager.list_takes(project=active_project)
+    take = next((item for item in takes["takes"] if item["take_id"] == take_id), None)
+    if take is None:
+        raise HTTPException(status_code=404, detail=f"Take not found: {take_id}")
+    snapshot_path = take.get("project_snapshot_path")
+    if not snapshot_path:
+        raise HTTPException(status_code=409, detail=f"Take has no snapshot: {take_id}")
+    return take, _existing_project_path(project_dir, Path(str(snapshot_path))), takes
+
+
+def _project_diff(
+    active_project: ArrangementProject,
+    candidate_project: ArrangementProject,
+) -> dict[str, Any]:
+    active_tracks = {track.id: track for track in active_project.tracks}
+    candidate_tracks = {track.id: track for track in candidate_project.tracks}
+    track_diffs: list[dict[str, Any]] = []
+    changed_bars: list[dict[str, Any]] = []
+    for track_id in sorted(set(active_tracks) | set(candidate_tracks)):
+        active_track = active_tracks.get(track_id)
+        candidate_track = candidate_tracks.get(track_id)
+        if active_track is None:
+            bars = [bar.number for bar in candidate_track.bars] if candidate_track else []
+            track_diffs.append(
+                {
+                    "track_id": track_id,
+                    "status": "added",
+                    "changed_bars": bars,
+                    "active_note_count": 0,
+                    "candidate_note_count": _track_note_count(candidate_track),
+                    "note_delta": _track_note_count(candidate_track),
+                }
+            )
+            changed_bars.extend(
+                {
+                    "track_id": track_id,
+                    "bar": bar_number,
+                    "active_note_count": 0,
+                    "candidate_note_count": _bar_note_count(
+                        next(bar for bar in candidate_track.bars if bar.number == bar_number)
+                    )
+                    if candidate_track
+                    else 0,
+                    "note_delta": _bar_note_count(
+                        next(bar for bar in candidate_track.bars if bar.number == bar_number)
+                    )
+                    if candidate_track
+                    else 0,
+                }
+                for bar_number in bars
+            )
+            continue
+        if candidate_track is None:
+            bars = [bar.number for bar in active_track.bars]
+            track_diffs.append(
+                {
+                    "track_id": track_id,
+                    "status": "removed",
+                    "changed_bars": bars,
+                    "active_note_count": _track_note_count(active_track),
+                    "candidate_note_count": 0,
+                    "note_delta": -_track_note_count(active_track),
+                }
+            )
+            changed_bars.extend(
+                {
+                    "track_id": track_id,
+                    "bar": bar.number,
+                    "active_note_count": _bar_note_count(bar),
+                    "candidate_note_count": 0,
+                    "note_delta": -_bar_note_count(bar),
+                }
+                for bar in active_track.bars
+            )
+            continue
+
+        active_bars = {bar.number: bar for bar in active_track.bars}
+        candidate_bars = {bar.number: bar for bar in candidate_track.bars}
+        track_changed_bars: list[int] = []
+        for bar_number in sorted(set(active_bars) | set(candidate_bars)):
+            before_bar = active_bars.get(bar_number)
+            after_bar = candidate_bars.get(bar_number)
+            if _bar_payload(before_bar) == _bar_payload(after_bar):
+                continue
+            before_notes = _bar_note_count(before_bar)
+            after_notes = _bar_note_count(after_bar)
+            track_changed_bars.append(bar_number)
+            changed_bars.append(
+                {
+                    "track_id": track_id,
+                    "bar": bar_number,
+                    "active_note_count": before_notes,
+                    "candidate_note_count": after_notes,
+                    "note_delta": after_notes - before_notes,
+                }
+            )
+        track_diffs.append(
+            {
+                "track_id": track_id,
+                "status": "modified" if track_changed_bars else "unchanged",
+                "changed_bars": track_changed_bars,
+                "active_note_count": _track_note_count(active_track),
+                "candidate_note_count": _track_note_count(candidate_track),
+                "note_delta": _track_note_count(candidate_track)
+                - _track_note_count(active_track),
+            }
+        )
+
+    modified_tracks = [track for track in track_diffs if track["status"] != "unchanged"]
+    return {
+        "summary": {
+            "changed_tracks": len(modified_tracks),
+            "changed_bars": len(changed_bars),
+            "active_note_count": sum(_track_note_count(track) for track in active_project.tracks),
+            "candidate_note_count": sum(
+                _track_note_count(track) for track in candidate_project.tracks
+            ),
+        },
+        "tracks": track_diffs,
+        "changed_bars": changed_bars,
+    }
+
+
+def _track_note_count(track: Any) -> int:
+    if track is None:
+        return 0
+    return sum(_bar_note_count(bar) for bar in track.bars)
+
+
+def _bar_note_count(bar: Any) -> int:
+    if bar is None:
+        return 0
+    return sum(1 for event in bar.events if getattr(event, "type", None) == "note")
+
+
+def _bar_payload(bar: Any) -> dict[str, Any] | None:
+    return bar.model_dump(mode="json") if bar is not None else None
+
+
+def _export_package_paths(project_dir: Path, manifest: dict[str, Any]) -> list[Path]:
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for record in manifest.get("files", []):
+        if record.get("status", "created") == "skipped":
+            continue
+        raw_path = record.get("path")
+        if not raw_path:
+            continue
+        path = _existing_project_path(project_dir, Path(str(raw_path)))
+        if path in seen:
+            continue
+        seen.add(path)
+        paths.append(path)
+    return sorted(paths, key=lambda item: item.relative_to(project_dir).as_posix())
 
 
 def _project_file_path(project_id: str, *, kind: str, track_id: str | None) -> Path:

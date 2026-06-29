@@ -28,6 +28,7 @@ from music21 import key as m21_key
 from arranger_core.catalogs import Instrument as CatalogInstrument
 from arranger_core.catalogs import InstrumentCatalog
 from arranger_core.music_theory import note_to_midi
+from arranger_core.release_gate import ReleaseExportMode, validate_release_quality
 from arranger_core.schema import (
     ArrangementProject,
     Bar,
@@ -60,6 +61,7 @@ def export_project(
     include_pdf: bool = True,
     instrument_catalog: InstrumentCatalog | None = None,
     validation_policy: Literal["strict", "report_only"] = "strict",
+    export_mode: ReleaseExportMode | None = None,
 ) -> dict[str, Any]:
     """Export an ArrangementProject to MIDI, MusicXML and optional PDFs."""
 
@@ -90,6 +92,30 @@ def export_project(
         files.append(song_plan_record)
     files.append(_file_record(validation_json_path, "validation_report_json"))
     files.append(_file_record(validation_html_path, "validation_report_html"))
+    takes_manifest = _build_export_takes_manifest(project, export_root)
+    files.append(
+        _write_json_mapping(
+            takes_manifest,
+            export_root / "takes_manifest.json",
+            "takes_manifest_json",
+        )
+    )
+    model_trace = _build_model_trace(project, takes_manifest)
+    files.append(
+        _write_json_mapping(
+            model_trace,
+            export_root / "model_trace.json",
+            "model_trace_json",
+        )
+    )
+    files.append(
+        _write_session_readme(
+            project,
+            export_root / "session_readme.md",
+            takes_manifest=takes_manifest,
+            model_trace=model_trace,
+        )
+    )
 
     midi_full_path = export_root / "full_arrangement.mid"
     write_full_midi(project, midi_full_path, catalog)
@@ -154,6 +180,19 @@ def export_project(
     write_validation_json(validation_report, validation_json_path)
     write_validation_html(validation_report, validation_html_path)
     if validation_policy == "strict" and validation_report["status"] == "fail":
+        raise MusicValidationError(validation_report)
+
+    release_quality_report = validate_release_quality(
+        project,
+        manifest,
+        export_root,
+        export_mode=export_mode,
+    )
+    validation_report = merge_validation_reports(validation_report, release_quality_report)
+    project.validation_report = validation_report
+    write_validation_json(validation_report, validation_json_path)
+    write_validation_html(validation_report, validation_html_path)
+    if validation_policy == "strict" and release_quality_report["status"] == "fail":
         raise MusicValidationError(validation_report)
 
     project.save_json(export_root / "arrangement_project.json")
@@ -475,10 +514,236 @@ def _write_song_plan(project: ArrangementProject, path: Path) -> dict[str, Any] 
     return _file_record(path, "song_plan_json")
 
 
+def _build_export_takes_manifest(
+    project: ArrangementProject,
+    export_root: Path,
+) -> dict[str, Any]:
+    source_path = export_root / "takes" / "takes_manifest.json"
+    if source_path.exists():
+        source = json.loads(source_path.read_text(encoding="utf-8"))
+        active_take_id = str(
+            project.metadata.get("active_take_id") or source.get("active_take_id") or ""
+        )
+        source_takes = source.get("takes", [])
+        takes = [
+            _export_take_record(take)
+            for take in source_takes
+            if isinstance(take, dict) and take.get("status") == "accepted"
+        ]
+        if active_take_id and not any(take.get("take_id") == active_take_id for take in takes):
+            active = next(
+                (
+                    _export_take_record(take)
+                    for take in source_takes
+                    if isinstance(take, dict)
+                    and take.get("take_id") == active_take_id
+                    and take.get("status") == "accepted"
+                ),
+                None,
+            )
+            if active is not None:
+                takes.append(active)
+        return {
+            "schema_version": source.get("schema_version", "0.1.0"),
+            "project_id": project.project_id,
+            "active_take_id": active_take_id or None,
+            "count": len(takes),
+            "takes": takes,
+            "export_policy": "accepted_only",
+            "excluded_statuses": ["pending", "rejected"],
+        }
+
+    active_take_id = str(
+        project.metadata.get("active_take_id")
+        or project.metadata.get("take_id")
+        or "take_base"
+    )
+    source = "model" if project.metadata.get("take_id") else "rule_based"
+    return {
+        "schema_version": "0.1.0",
+        "project_id": project.project_id,
+        "active_take_id": active_take_id,
+        "count": 1,
+        "takes": [
+            {
+                "take_id": active_take_id,
+                "project_id": project.project_id,
+                "source": source,
+                "status": "accepted",
+                "bars": [],
+                "artifact_ids": [],
+                "metadata": {
+                    "validation_status": project.validation_report.get("status"),
+                    "take_status": project.metadata.get("take_status", "accepted"),
+                },
+            }
+        ],
+        "export_policy": "accepted_only",
+        "excluded_statuses": ["pending", "rejected"],
+    }
+
+
+def _export_take_record(take: dict[str, Any]) -> dict[str, Any]:
+    allowed_keys = (
+        "take_id",
+        "project_id",
+        "parent_take_id",
+        "source",
+        "backend_id",
+        "task",
+        "track_id",
+        "bars",
+        "instruction",
+        "seed",
+        "status",
+        "validation_report_id",
+        "artifact_ids",
+        "created_at",
+        "updated_at",
+    )
+    record = {key: take[key] for key in allowed_keys if key in take}
+    metadata = take.get("metadata", {})
+    record["metadata"] = _safe_take_metadata(metadata if isinstance(metadata, dict) else {})
+    return record
+
+
+def _safe_take_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    safe: dict[str, Any] = {}
+    for key in ("label", "validation_status", "accepted_at"):
+        if key in metadata:
+            safe[key] = metadata[key]
+    trace = metadata.get("model_trace")
+    if isinstance(trace, dict):
+        safe["model_trace"] = _safe_model_trace_fields(trace)
+    return safe
+
+
+def _safe_model_trace_fields(trace: dict[str, Any]) -> dict[str, Any]:
+    allowed_keys = (
+        "backend",
+        "backend_id",
+        "task",
+        "prompt",
+        "instruction",
+        "track_id",
+        "bars",
+        "density",
+        "temperature",
+        "seed",
+        "validation_status",
+        "commercial_use",
+    )
+    return {key: trace[key] for key in allowed_keys if key in trace}
+
+
+def _build_model_trace(
+    project: ArrangementProject,
+    takes_manifest: dict[str, Any],
+) -> dict[str, Any]:
+    takes = [
+        take
+        for take in takes_manifest.get("takes", [])
+        if isinstance(take, dict) and take.get("status") == "accepted"
+    ]
+    active_take_id = takes_manifest.get("active_take_id")
+    active_take = next(
+        (take for take in takes if take.get("take_id") == active_take_id),
+        None,
+    )
+    model_artifacts: list[dict[str, Any]] = []
+    if active_take is not None and active_take.get("source") == "model":
+        model_artifacts.append(_model_trace_record(project, active_take))
+    return {
+        "schema_version": "0.1.0",
+        "project_id": project.project_id,
+        "active_take_id": active_take_id,
+        "trace_scope": "active_accepted_take",
+        "status": "traced" if model_artifacts else "no_model_artifacts",
+        "accepted_take_count": len(takes),
+        "model_artifacts": model_artifacts,
+    }
+
+
+def _model_trace_record(
+    project: ArrangementProject,
+    take: dict[str, Any],
+) -> dict[str, Any]:
+    metadata = take.get("metadata", {})
+    trace = metadata.get("model_trace", {}) if isinstance(metadata, dict) else {}
+    if not isinstance(trace, dict):
+        trace = {}
+    backend_id = trace.get("backend_id") or trace.get("backend") or take.get("backend_id")
+    project_prompt = project.generation_spec.prompt if project.generation_spec else None
+    return {
+        "take_id": take.get("take_id"),
+        "status": take.get("status"),
+        "backend_id": backend_id,
+        "task": trace.get("task") or take.get("task"),
+        "prompt": trace.get("prompt") or project_prompt,
+        "instruction": trace.get("instruction") or take.get("instruction"),
+        "track_id": trace.get("track_id") or take.get("track_id"),
+        "bars": _int_list(trace.get("bars") or take.get("bars") or []),
+        "seed": trace.get("seed") if trace.get("seed") is not None else take.get("seed"),
+        "validation_result": (
+            trace.get("validation_status")
+            or metadata.get("validation_status")
+            or project.validation_report.get("status")
+        ),
+        "commercial_use": trace.get("commercial_use", "unknown"),
+    }
+
+
+def _int_list(value: Any) -> list[int]:
+    if not isinstance(value, list):
+        return []
+    items: list[int] = []
+    for item in value:
+        try:
+            items.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    return items
+
+
 def _write_json_mapping(data: dict[str, Any], path: Path, kind: str) -> dict[str, Any]:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return _file_record(path, kind)
+
+
+def _write_session_readme(
+    project: ArrangementProject,
+    path: Path,
+    *,
+    takes_manifest: dict[str, Any],
+    model_trace: dict[str, Any],
+) -> dict[str, Any]:
+    lines = [
+        "# AI Arranger Studio DAW Export",
+        "",
+        f"Project: `{project.project_id}`",
+        f"Active take: `{takes_manifest.get('active_take_id') or '-'}`",
+        f"Accepted takes in package: `{takes_manifest.get('count', 0)}`",
+        f"Model trace status: `{model_trace.get('status', '-')}`",
+        "",
+        "## Files",
+        "",
+        "- `full_arrangement.mid`: multitrack MIDI with conductor, tempo, meter and markers.",
+        "- `midi_tracks/`: one MIDI file per arrangement track.",
+        "- `full_score.musicxml`: full score for notation editors.",
+        "- `full_score.pdf`: full score PDF when MuseScore CLI is available.",
+        "- `parts_pdf/`: individual part PDFs when MuseScore CLI is available.",
+        "- `validation_report.html`: validation summary.",
+        "- `model_trace.json`: accepted active model take trace.",
+        "- `takes_manifest.json`: accepted takes included in this final export.",
+        "- `arrangement_project.json`: canonical project snapshot.",
+        "",
+        "Raw model artifacts, pending takes and rejected takes are not part of this export.",
+        "",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return _file_record(path, "session_readme")
 
 
 def _file_record(path: Path, kind: str, **extra: Any) -> dict[str, Any]:

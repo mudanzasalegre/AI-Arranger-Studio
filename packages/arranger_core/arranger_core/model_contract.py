@@ -155,6 +155,57 @@ class DeterministicWalkingBassBackend:
         )
 
 
+class DeterministicRoleModelBackend:
+    """Deterministic multi-role backend for custom-role interface smoke tests."""
+
+    name = "deterministic-role-model-placeholder"
+    version = MODEL_CONTRACT_VERSION
+
+    def __init__(self, *, chord_parser: ChordParser | None = None) -> None:
+        self.chord_parser = chord_parser or ChordParser.load_default()
+        self._bass_backend = DeterministicWalkingBassBackend(chord_parser=self.chord_parser)
+
+    def generate(self, request: ModelRequest) -> ModelResponse:
+        if request.role == "walking_bass":
+            response = self._bass_backend.generate(request)
+            return response.model_copy(
+                update={
+                    "backend_name": self.name,
+                    "backend_version": self.version,
+                    "metadata": {
+                        **response.metadata,
+                        "source": "deterministic_multi_role_placeholder",
+                    },
+                }
+            )
+
+        bar_count = int(request.controls.get("bar_count") or len(request.chord_context) or 1)
+        beats_by_bar = request.controls.get("beats_per_bar", [])
+        tokens: list[str] = []
+        for bar_number in range(1, bar_count + 1):
+            beat_count = _beat_count_for_bar(beats_by_bar, bar_number)
+            if request.role == "drums":
+                tokens.extend(_deterministic_drum_tokens(bar_number, beat_count))
+            elif request.role in {"comping", "piano_comping"}:
+                tokens.extend(_deterministic_piano_tokens(bar_number, beat_count))
+            elif request.role == "horn_response":
+                tokens.extend(_deterministic_melody_tokens(bar_number, beat_count, pitch="G4"))
+            else:
+                tokens.extend(_deterministic_melody_tokens(bar_number, beat_count, pitch="C4"))
+
+        return ModelResponse(
+            role=request.role,
+            target_tokens=tokens,
+            backend_name=self.name,
+            backend_version=self.version,
+            metadata={
+                "contract": "symbolic_note_tokens",
+                "bar_count": bar_count,
+                "source": "deterministic_multi_role_placeholder",
+            },
+        )
+
+
 def _beat_count_for_bar(raw_beats_by_bar: Any, bar_number: int) -> int:
     if isinstance(raw_beats_by_bar, list) and bar_number <= len(raw_beats_by_bar):
         try:
@@ -196,3 +247,46 @@ def _nearest_bass_pitch(target_pc: int, anchor_midi: int) -> tuple[str, int]:
     ]
     selected = min(candidates, key=lambda midi_note: abs(midi_note - anchor_midi))
     return midi_to_note(selected, prefer_sharps=False), selected
+
+
+def _deterministic_drum_tokens(bar_number: int, beat_count: int) -> list[str]:
+    tokens: list[str] = []
+    step_count = max(1, beat_count * 2)
+    for index in range(step_count):
+        start = index * 0.5
+        tokens.append(
+            note_token(bar=bar_number, start=start, duration=0.5, pitch="D#3", velocity=70)
+        )
+        if start in {1.0, 3.0}:
+            tokens.append(
+                note_token(bar=bar_number, start=start, duration=0.5, pitch="G#2", velocity=68)
+            )
+        if start in {0.0, 2.0}:
+            tokens.append(
+                note_token(bar=bar_number, start=start, duration=0.5, pitch="C2", velocity=52)
+            )
+        if start in {1.5, 3.5}:
+            tokens.append(
+                note_token(bar=bar_number, start=start, duration=0.5, pitch="D2", velocity=46)
+            )
+    return tokens
+
+
+def _deterministic_piano_tokens(bar_number: int, beat_count: int) -> list[str]:
+    starts = [0.5, 2.5] if beat_count >= 4 else [0.0]
+    tokens: list[str] = []
+    for start in starts:
+        if start >= beat_count:
+            continue
+        for pitch in ("E4", "Bb4", "D5"):
+            tokens.append(
+                note_token(bar=bar_number, start=start, duration=0.75, pitch=pitch, velocity=70)
+            )
+    return tokens
+
+
+def _deterministic_melody_tokens(bar_number: int, beat_count: int, *, pitch: str) -> list[str]:
+    duration = 0.75 if beat_count >= 1 else 0.5
+    return [
+        note_token(bar=bar_number, start=0.0, duration=duration, pitch=pitch, velocity=82),
+    ]

@@ -16,6 +16,19 @@ PatternCategory = Literal[
     "horn_responses",
 ]
 DatasetSplit = Literal["train", "val", "test"]
+LicenseConfidence = Literal["high", "medium", "low"]
+CommercialTrainingUse = Literal["allowed", "forbidden", "review_required"]
+DatasetRole = Literal[
+    "melody",
+    "bass",
+    "drums",
+    "comping",
+    "horns",
+    "pad",
+    "solo",
+    "harmony",
+    "unknown",
+]
 
 
 class DatasetModel(BaseModel):
@@ -26,12 +39,19 @@ class DatasetManifestEntry(DatasetModel):
     path: str
     source: str
     license: str
+    license_confidence: LicenseConfidence = "low"
+    commercial_training: CommercialTrainingUse = "review_required"
+    local_learning_only: bool = False
     copyright_notes: str = ""
     usable_for_training: bool = False
     usable_for_pattern_extraction: bool = False
     style: str = "unknown"
     quality: int = Field(default=3, ge=1, le=5)
     tags: list[str] = Field(default_factory=list)
+    roles: list[DatasetRole] = Field(default_factory=list)
+    contains_melody: bool = False
+    contains_chords: bool = False
+    contains_arrangement: bool = False
     imported_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     hash: str = ""
 
@@ -65,6 +85,9 @@ class NormalizedFile(DatasetModel):
     normalized_path: str
     source: str
     license: str
+    license_confidence: LicenseConfidence = "low"
+    commercial_training: CommercialTrainingUse = "review_required"
+    local_learning_only: bool = False
     hash: str
     style: str
     quality: int
@@ -73,6 +96,10 @@ class NormalizedFile(DatasetModel):
     usable_for_pattern_extraction: bool
     duplicate_of: str | None = None
     role_hints: list[str] = Field(default_factory=list)
+    roles: list[DatasetRole] = Field(default_factory=list)
+    contains_melody: bool = False
+    contains_chords: bool = False
+    contains_arrangement: bool = False
     stats: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -161,10 +188,80 @@ class ImportSummary(DatasetModel):
     skipped_for_quality: int = 0
     extracted_patterns: int = 0
     pattern_counts: dict[str, int] = Field(default_factory=dict)
+    profiled_files: int = 0
+    role_counts: dict[str, int] = Field(default_factory=dict)
     manifest_path: str
     normalized_files_path: str
     pattern_index_path: str
+    profile_report_path: str = ""
+    role_manifest_path: str = ""
     summary_path: str
+
+
+class RoleClassification(DatasetModel):
+    role: DatasetRole
+    confidence: float = Field(ge=0.0, le=1.0)
+    reasons: list[str] = Field(default_factory=list)
+    alternatives: dict[DatasetRole, float] = Field(default_factory=dict)
+
+
+class TrackProfile(DatasetModel):
+    track_index: int
+    name: str
+    source_kind: Literal["midi_track", "musicxml_part"]
+    channels: list[int] = Field(default_factory=list)
+    programs: list[int] = Field(default_factory=list)
+    instrument_guess: str = "unknown"
+    classification: RoleClassification
+    features: dict[str, Any] = Field(default_factory=dict)
+    no_memorization_fingerprint: str
+
+
+class DatasetFileProfile(DatasetModel):
+    schema_version: str = "0.1.0"
+    file_id: str
+    original_path: str
+    normalized_path: str = ""
+    source: str
+    license: str
+    license_confidence: LicenseConfidence = "low"
+    commercial_training: CommercialTrainingUse = "review_required"
+    local_learning_only: bool = False
+    style: str = "unknown"
+    quality: int = Field(default=3, ge=1, le=5)
+    tags: list[str] = Field(default_factory=list)
+    usable_for_training: bool = False
+    usable_for_pattern_extraction: bool = False
+    duplicate_of: str | None = None
+    hash: str
+    format: str
+    track_profiles: list[TrackProfile] = Field(default_factory=list)
+    file_features: dict[str, Any] = Field(default_factory=dict)
+    role_coverage: list[DatasetRole] = Field(default_factory=list)
+    contains_melody: bool = False
+    contains_chords: bool = False
+    contains_arrangement: bool = False
+    pattern_sensitivity: dict[str, Any] = Field(default_factory=dict)
+    no_memorization_fingerprint: str
+
+
+class DatasetProfileReport(DatasetModel):
+    schema_version: str = "0.1.0"
+    files: list[DatasetFileProfile] = Field(default_factory=list)
+    role_counts: dict[str, int] = Field(default_factory=dict)
+    file_count: int = 0
+    track_count: int = 0
+    note_count: int = 0
+
+    def save_json(self, path: str | Path) -> Path:
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(self.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        return output_path
+
+    @classmethod
+    def load_json(cls, path: str | Path) -> DatasetProfileReport:
+        return cls.model_validate_json(Path(path).read_text(encoding="utf-8"))
 
 
 class TrainingExample(DatasetModel):
