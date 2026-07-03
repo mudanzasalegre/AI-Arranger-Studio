@@ -72,17 +72,29 @@ class LlmPlanner:
         if self.provider is not None:
             previous_error: str | None = None
             for attempt_number in (1, 2):
-                raw_json = self.provider.generate_plan_json(
-                    prompt=prompt,
-                    system_prompt=_system_prompt(
-                        mode=mode,
-                        project=project,
-                        locked_tracks=locked_tracks or [],
-                        locked_sections=locked_sections or [],
+                try:
+                    raw_json = self.provider.generate_plan_json(
+                        prompt=prompt,
+                        system_prompt=_system_prompt(
+                            mode=mode,
+                            project=project,
+                            locked_tracks=locked_tracks or [],
+                            locked_sections=locked_sections or [],
+                            previous_error=previous_error,
+                        ),
                         previous_error=previous_error,
-                    ),
-                    previous_error=previous_error,
-                )
+                    )
+                except Exception as exc:
+                    previous_error = f"provider_error: {exc}"
+                    attempts.append(
+                        PlanAttempt(
+                            attempt=attempt_number,
+                            source="llm",
+                            status="fail",
+                            error=previous_error,
+                        )
+                    )
+                    continue
                 patch, parse_report = self.validator.parse_patch_json(raw_json)
                 if patch is not None:
                     validation = self.validator.validate_patch(
@@ -321,6 +333,17 @@ def _system_prompt(
         "locked_tracks": locked_tracks,
         "locked_sections": locked_sections,
     }
+    if project.generation_spec is not None:
+        context["generation_spec"] = {
+            "style": project.generation_spec.style,
+            "substyle": project.generation_spec.substyle,
+            "tempo": project.generation_spec.tempo,
+            "meter": project.generation_spec.meter,
+            "key": project.generation_spec.key,
+            "form": project.generation_spec.form,
+            "ensemble": project.generation_spec.ensemble,
+            "instruments": project.generation_spec.instruments,
+        }
     repair = f"\nPrevious validation error: {previous_error}" if previous_error else ""
     return f"{SYSTEM_PROMPT}\nProject context:\n{json.dumps(context, sort_keys=True)}{repair}"
 

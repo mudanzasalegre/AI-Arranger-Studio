@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.local-models.example
 .venv/
 venv/
 
@@ -31,6 +32,11 @@ data/raw/
 data/private/
 data/processed/
 midi_databases/
+
+# Local AI model runtime config copied from examples
+configs/ai_models.local.yaml
+configs/local_model_runtime.yaml
+configs/model_registry.yaml
 
 # Heavy model/checkpoint artifacts
 *.pt

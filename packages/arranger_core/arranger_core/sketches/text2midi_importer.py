@@ -29,7 +29,8 @@ from arranger_core.takes.models import ModelArtifactRecord
 from arranger_core.validators import validate_project
 
 TICKS_PER_BEAT_FALLBACK = 480
-SketchStatus = Literal["sketch_valid", "sketch_uncertain", "sketch_rejected"]
+SketchStatus = Literal["sketch_validated", "sketch_uncertain", "sketch_rejected"]
+DRUM_ALLOWED_MIDI = (36, 38, 42, 44, 45, 47, 49, 50, 51)
 
 
 class SketchImportError(ValueError):
@@ -208,7 +209,7 @@ class Text2MidiSketchImporter:
             if validation_report["status"] == "fail"
             else "sketch_uncertain"
             if uncertainty_reasons
-            else "sketch_valid"
+            else "sketch_validated"
         )
         limitations = [
             "sketch_not_final_arrangement",
@@ -423,20 +424,29 @@ def _track_bars(
         if start >= beats_per_bar:
             continue
         duration = min(duration, beats_per_bar - start)
+        pitch_midi = (
+            _nearest_drum_pitch(note.note)
+            if classification.role == "drums" or classification.instrument == "drum_kit"
+            else note.note
+        )
+        annotations: dict[str, Any] = {
+            "source": "text2midi_sketch",
+            "source_track_name": track.name,
+            "role": classification.role,
+            "role_confidence": classification.confidence,
+            "imported_model": True,
+            "final_material": False,
+        }
+        if pitch_midi != note.note:
+            annotations["source_midi_note"] = note.note
+            annotations["normalized_drum_pitch"] = True
         notes_by_bar[bar_number].append(
             NoteEvent(
-                pitch=midi_to_note(note.note, prefer_sharps=False),
+                pitch=midi_to_note(pitch_midi, prefer_sharps=False),
                 start=round(start, 3),
                 duration=round(duration, 3),
                 velocity=max(1, min(127, note.velocity)),
-                annotations={
-                    "source": "text2midi_sketch",
-                    "source_track_name": track.name,
-                    "role": classification.role,
-                    "role_confidence": classification.confidence,
-                    "imported_model": True,
-                    "final_material": False,
-                },
+                annotations=annotations,
             )
         )
     return [
@@ -462,6 +472,10 @@ def _fill_rests(notes: list[NoteEvent], expected: float) -> list[NoteEvent | Res
     if not events:
         events.append(RestEvent(start=0.0, duration=round(expected, 3)))
     return events
+
+
+def _nearest_drum_pitch(value: int) -> int:
+    return min(DRUM_ALLOWED_MIDI, key=lambda allowed: (abs(allowed - value), allowed))
 
 
 def _bar_count(

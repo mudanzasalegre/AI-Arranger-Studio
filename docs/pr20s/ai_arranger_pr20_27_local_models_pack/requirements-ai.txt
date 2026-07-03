@@ -1,0 +1,15 @@
+# Optional AI runtime dependencies. Install only after PR-20.
+# Base repo dependencies still come from requirements.txt.
+
+huggingface_hub>=0.23
+httpx>=0.27
+python-dotenv>=1.0
+
+# MIDI-GPT local inference. This pulls torch through the package extra.
+midigpt[inference]
+
+# Common model utilities used by Text2MIDI/local planners.
+torch>=2.0
+transformers>=4.38
+sentencepiece
+protobuf

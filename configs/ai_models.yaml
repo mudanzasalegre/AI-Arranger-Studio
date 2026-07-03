@@ -31,10 +31,12 @@ backends:
     commercial_use: review_required
     dependency_mode: optional
     install_hint: pip install "midigpt[inference]"
+    output_dir: outputs/model_artifacts/raw
     tasks:
       - infill_bars
       - generate_track
       - continue_section
+      - generate_variation
     capabilities:
       symbolic_midi: true
       multitrack: true
@@ -50,10 +52,19 @@ backends:
     enabled: false
     type: symbolic
     adapter: model_backends.symbolic.text2midi_backend.Text2MidiBackend
+    model_name: text2midi
     commercial_use: review_required
     dependency_mode: optional
     execution_mode: worker_or_subprocess
-    install_hint: install Text2MIDI in the optional model worker profile
+    install_hint: clone https://github.com/AMAAI-Lab/text2midi into models/external_repos/text2midi and download pytorch_model.bin/vocab_remi.pkl
+    repo_dir: models/external_repos/text2midi
+    checkpoint_dir: models/checkpoints/text2midi
+    model_file: pytorch_model.bin
+    tokenizer_file: vocab_remi.pkl
+    flan_tokenizer: google/flan-t5-base
+    wrapper_path: scripts/models/run_text2midi_inference.py
+    output_dir: outputs/model_artifacts/raw
+    max_len: 2000
     tasks:
       - generate_full_sketch
     capabilities:
@@ -66,6 +77,152 @@ backends:
       token_output: false
       supports_training: true
       commercial_use: review_required
+
+  local_llm_planner:
+    enabled: false
+    type: planner
+    adapter: model_backends.planner.ollama_planner_backend.OllamaPlannerBackend
+    provider: ollama
+    base_url: http://127.0.0.1:11434/api
+    model_name: qwen3:8b
+    timeout_seconds: 120
+    temperature: 0.2
+    num_ctx: 4096
+    commercial_use: review_required
+    dependency_mode: optional
+    install_hint: install Ollama, run `ollama pull qwen3:8b`, then enable this backend locally
+    tasks:
+      - plan_song
+    capabilities:
+      symbolic_midi: false
+      multitrack: false
+      bar_infill: false
+      track_generation: false
+      text_prompt: true
+      json_planning: true
+      token_output: false
+      supports_training: false
+      commercial_use: review_required
+
+  custom_jazz_melody_v001:
+    enabled: true
+    type: custom_role
+    adapter: model_backends.custom_role.dummy_backend.DummyCustomRoleModelBackend
+    role: melody
+    checkpoint_dir: models/checkpoints/custom/melody/jazz_melody_v001
+    commercial_use: unknown
+    dependency_mode: local_checkpoint
+    install_hint: train or copy a local melody checkpoint with training_manifest.yaml and license_report.json
+    tasks:
+      - generate_track
+      - infill_bars
+      - generate_variation
+    capabilities:
+      symbolic_midi: false
+      multitrack: false
+      bar_infill: true
+      track_generation: true
+      text_prompt: false
+      json_planning: false
+      token_output: true
+      supports_training: true
+      commercial_use: unknown
+
+  custom_jazz_walking_bass_v001:
+    enabled: true
+    type: custom_role
+    adapter: model_backends.custom_role.dummy_backend.DummyCustomRoleModelBackend
+    role: walking_bass
+    checkpoint_dir: models/checkpoints/custom/bass/jazz_walking_bass_v001
+    commercial_use: unknown
+    dependency_mode: local_checkpoint
+    install_hint: train or copy a local walking bass checkpoint with training_manifest.yaml and license_report.json
+    tasks:
+      - generate_track
+      - infill_bars
+      - generate_variation
+    capabilities:
+      symbolic_midi: false
+      multitrack: false
+      bar_infill: true
+      track_generation: true
+      text_prompt: false
+      json_planning: false
+      token_output: true
+      supports_training: true
+      commercial_use: unknown
+
+  custom_jazz_piano_comping_v001:
+    enabled: true
+    type: custom_role
+    adapter: model_backends.custom_role.dummy_backend.DummyCustomRoleModelBackend
+    role: piano_comping
+    checkpoint_dir: models/checkpoints/custom/piano_comping/jazz_piano_comping_v001
+    commercial_use: unknown
+    dependency_mode: local_checkpoint
+    install_hint: train or copy a local piano comping checkpoint with training_manifest.yaml and license_report.json
+    tasks:
+      - generate_track
+      - infill_bars
+      - generate_variation
+    capabilities:
+      symbolic_midi: false
+      multitrack: false
+      bar_infill: true
+      track_generation: true
+      text_prompt: false
+      json_planning: false
+      token_output: true
+      supports_training: true
+      commercial_use: unknown
+
+  custom_jazz_horn_responses_v001:
+    enabled: true
+    type: custom_role
+    adapter: model_backends.custom_role.dummy_backend.DummyCustomRoleModelBackend
+    role: horn_responses
+    checkpoint_dir: models/checkpoints/custom/horns/jazz_horn_responses_v001
+    commercial_use: unknown
+    dependency_mode: local_checkpoint
+    install_hint: train or copy a local horn responses checkpoint with training_manifest.yaml and license_report.json
+    tasks:
+      - generate_track
+      - infill_bars
+      - generate_variation
+    capabilities:
+      symbolic_midi: false
+      multitrack: false
+      bar_infill: true
+      track_generation: true
+      text_prompt: false
+      json_planning: false
+      token_output: true
+      supports_training: true
+      commercial_use: unknown
+
+  custom_jazz_drums_v001:
+    enabled: true
+    type: custom_role
+    adapter: model_backends.custom_role.dummy_backend.DummyCustomRoleModelBackend
+    role: drums
+    checkpoint_dir: models/checkpoints/custom/drums/jazz_drums_v001
+    commercial_use: unknown
+    dependency_mode: local_checkpoint
+    install_hint: train or copy a local drums checkpoint with training_manifest.yaml and license_report.json
+    tasks:
+      - generate_track
+      - infill_bars
+      - generate_variation
+    capabilities:
+      symbolic_midi: false
+      multitrack: false
+      bar_infill: true
+      track_generation: true
+      text_prompt: false
+      json_planning: false
+      token_output: true
+      supports_training: true
+      commercial_use: unknown
 
 settings:
   forbid_audio_models: true

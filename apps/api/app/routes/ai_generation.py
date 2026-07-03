@@ -419,6 +419,7 @@ def _model_request(
         metadata={
             **payload.metadata,
             "context_midi_path": str(context_midi_path),
+            "context_track_map": _context_track_map(project),
             "target_role": target_role,
             "target_instrument": target_instrument,
         },
@@ -432,8 +433,26 @@ def _write_context_midi(
     request_id: str,
 ) -> Path:
     path = project_dir / "model_contexts" / f"{request_id}_context.mid"
-    write_full_midi(project, path)
+    context_project = project.model_copy(deep=True)
+    for track in context_project.tracks:
+        track.name = track.id
+        track.metadata = {
+            **track.metadata,
+            "model_context_track_name": track.id,
+        }
+    write_full_midi(context_project, path)
+    _write_json(
+        path.with_suffix(".track_map.json"),
+        {
+            "project_id": project.project_id,
+            "tracks": _context_track_map(project),
+        },
+    )
     return path
+
+
+def _context_track_map(project: ArrangementProject) -> dict[str, str]:
+    return {track.id: track.id for track in project.tracks}
 
 
 def _section_context(song_plan: dict[str, Any] | None, bars: list[int]) -> dict[str, Any] | None:

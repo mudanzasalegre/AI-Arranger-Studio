@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import types
+from pathlib import Path
 
 import mido
 import pytest
@@ -72,32 +74,74 @@ def test_midigpt_backend_generate_reports_controlled_missing_dependency(monkeypa
         backend.generate(ModelGenerationRequest(task="infill_bars"))
 
 
-def test_midigpt_backend_materializes_fake_engine_output(tmp_path, monkeypatch):
+def test_midigpt_backend_uses_real_session_api(tmp_path, monkeypatch):
     from model_backends.symbolic.midigpt_backend import MidiGptBackend
 
-    class FakeInferenceEngine:
-        @classmethod
-        def from_pretrained(cls, model_name):
-            assert model_name == "yellow"
-            return cls()
+    calls = {}
+    context_path = tmp_path / "context.mid"
+    _write_context_midi(context_path, ["Conductor", "alto_sax"])
 
-        def generate_infill(self, **kwargs):
-            assert kwargs["target_track_id"] == "alto_sax"
+    class FakeTrack:
+        def __init__(self, name):
+            self.name = name
+
+    class FakeScore:
+        def __init__(self, tracks):
+            self.tracks = tracks
+
+        @classmethod
+        def from_midi(cls, path):
+            calls["context_path"] = path
+            return cls([FakeTrack("alto_sax")])
+
+    class FakeInferenceConfig:
+        def __init__(self, **kwargs):
+            calls["inference_config"] = kwargs
+
+    class FakeTrackPrompt:
+        def __init__(self, *, id, bars, ignore=False):
+            calls["track_prompt"] = {"id": id, "bars": bars, "ignore": ignore}
+
+    class FakeGenerationRequest:
+        def __init__(self, *, tracks, config):
+            calls["generation_request"] = {"tracks": tracks, "config": config}
+
+    class FakeResult:
+        def to_midi(self, path):
+            calls["to_midi_path"] = path
             midi_file = mido.MidiFile(type=1, ticks_per_beat=480)
             track = mido.MidiTrack()
             track.append(mido.Message("note_on", note=64, velocity=80, time=0))
             track.append(mido.Message("note_off", note=64, velocity=0, time=480))
             midi_file.tracks.append(track)
-            return midi_file
+            midi_file.save(path)
+
+    class FakeSession:
+        def run(self):
+            calls["run"] = True
+            return FakeResult()
+
+    class FakeInferenceEngine:
+        @classmethod
+        def from_pretrained(cls, model_name):
+            assert model_name == "yellow"
+            calls["model_name"] = model_name
+            return cls()
+
+        def session(self, score, request):
+            calls["session"] = {"score": score, "request": request}
+            return FakeSession()
 
     monkeypatch.setattr(importlib.util, "find_spec", lambda name, *args, **kwargs: object())
     midigpt_module = types.ModuleType("midigpt")
+    midigpt_module.Score = FakeScore
     inference_module = types.ModuleType("midigpt.inference")
-    engine_module = types.ModuleType("midigpt.inference.engine")
-    engine_module.InferenceEngine = FakeInferenceEngine
+    inference_module.InferenceEngine = FakeInferenceEngine
+    inference_module.GenerationRequest = FakeGenerationRequest
+    inference_module.InferenceConfig = FakeInferenceConfig
+    inference_module.TrackPrompt = FakeTrackPrompt
     monkeypatch.setitem(sys.modules, "midigpt", midigpt_module)
     monkeypatch.setitem(sys.modules, "midigpt.inference", inference_module)
-    monkeypatch.setitem(sys.modules, "midigpt.inference.engine", engine_module)
 
     backend = MidiGptBackend(output_dir=tmp_path)
     result = backend.generate(
@@ -105,10 +149,10 @@ def test_midigpt_backend_materializes_fake_engine_output(tmp_path, monkeypatch):
             task="infill_bars",
             request_id="fake-engine",
             track_id="alto_sax",
-            bars=[1],
+            bars=[9],
             instruction="bebop phrase",
             seed=77,
-            metadata={"context_midi_path": "context.mid"},
+            metadata={"context_midi_path": str(context_path)},
         )
     )
 
@@ -116,6 +160,18 @@ def test_midigpt_backend_materializes_fake_engine_output(tmp_path, monkeypatch):
     assert artifact.artifact_type == "midi"
     assert artifact.metadata["model_name"] == "yellow"
     assert artifact.metadata["track_id"] == "alto_sax"
+    assert calls["context_path"] == str(context_path)
+    assert calls["track_prompt"] == {"id": 0, "bars": [8], "ignore": False}
+    assert calls["inference_config"] == {
+        "temperature": 0.8,
+        "seed": 77,
+        "top_p": 0.95,
+        "model_dim": 9,
+        "mask_mode": "attention",
+        "polyphony_hard_limit": 4,
+    }
+    assert calls["run"] is True
+    assert calls["to_midi_path"] == str(tmp_path / "midigpt_infill_bars_fake-engine.full.mid")
     assert (tmp_path / "midigpt_infill_bars_fake-engine.mid").read_bytes()[:4] == b"MThd"
 
 
@@ -177,36 +233,54 @@ def test_text2midi_backend_generate_reports_controlled_missing_dependency(monkey
         backend.generate(ModelGenerationRequest(task="generate_full_sketch"))
 
 
-def test_text2midi_backend_materializes_fake_engine_output(tmp_path, monkeypatch):
+def test_text2midi_backend_runs_subprocess_wrapper(tmp_path, monkeypatch):
     from model_backends.symbolic.text2midi_backend import Text2MidiBackend
 
-    class FakeText2MidiPipeline:
-        @classmethod
-        def from_pretrained(cls, model_name):
-            assert model_name == "text2midi"
-            return cls()
+    fake_repo = tmp_path / "text2midi"
+    (fake_repo / "model").mkdir(parents=True)
+    (fake_repo / "model" / "transformer_model.py").write_text("", encoding="utf-8")
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    (checkpoint_dir / "pytorch_model.bin").write_bytes(b"fake")
+    (checkpoint_dir / "vocab_remi.pkl").write_bytes(b"fake")
+    wrapper_path = tmp_path / "run_text2midi_inference.py"
+    wrapper_path.write_text("", encoding="utf-8")
 
-        def generate_full_sketch(self, **kwargs):
-            assert kwargs["prompt"] == "hard bop sketch"
-            midi_file = mido.MidiFile(type=1, ticks_per_beat=480)
-            track = mido.MidiTrack()
-            track.append(mido.MetaMessage("track_name", name="Alto Sax Lead", time=0))
-            track.append(mido.Message("program_change", program=65, channel=0, time=0))
-            track.append(mido.Message("note_on", note=64, velocity=80, channel=0, time=0))
-            track.append(mido.Message("note_off", note=64, velocity=0, channel=0, time=480))
-            midi_file.tracks.append(track)
-            return midi_file
+    required = {
+        "torch",
+        "transformers",
+        "sentencepiece",
+        "einops",
+        "jsonlines",
+        "accelerate",
+        "st_moe_pytorch",
+    }
 
     monkeypatch.setattr(
         importlib.util,
         "find_spec",
-        lambda name, *args, **kwargs: object() if name == "text2midi" else None,
+        lambda name, *args, **kwargs: object() if name in required else None,
     )
-    text2midi_module = types.ModuleType("text2midi")
-    text2midi_module.Text2MidiPipeline = FakeText2MidiPipeline
-    monkeypatch.setitem(sys.modules, "text2midi", text2midi_module)
+    calls = {}
 
-    backend = Text2MidiBackend(output_dir=tmp_path)
+    def fake_run(cmd, *, cwd, text, capture_output, check):
+        calls["cmd"] = cmd
+        calls["cwd"] = cwd
+        calls["text"] = text
+        calls["capture_output"] = capture_output
+        calls["check"] = check
+        output_path = Path(cmd[cmd.index("--output") + 1])
+        _write_context_midi(output_path, ["Alto Sax Lead"])
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    backend = Text2MidiBackend(
+        output_dir=tmp_path,
+        repo_dir=fake_repo,
+        checkpoint_dir=checkpoint_dir,
+        wrapper_path=wrapper_path,
+    )
     result = backend.generate(
         ModelGenerationRequest(
             task="generate_full_sketch",
@@ -220,5 +294,21 @@ def test_text2midi_backend_materializes_fake_engine_output(tmp_path, monkeypatch
     assert artifact.artifact_type == "midi"
     assert artifact.metadata["model_name"] == "text2midi"
     assert artifact.metadata["sketch_only"] is True
+    assert artifact.metadata["execution_mode"] == "subprocess"
+    assert calls["cmd"][0] == sys.executable
+    assert calls["cmd"][calls["cmd"].index("--prompt") + 1] == "hard bop sketch"
+    assert calls["cmd"][calls["cmd"].index("--seed") + 1] == "88"
     artifact_path = tmp_path / "text2midi_generate_full_sketch_fake-text2midi.mid"
     assert artifact_path.read_bytes()[:4] == b"MThd"
+
+
+def _write_context_midi(path, track_names: list[str]) -> None:
+    midi_file = mido.MidiFile(type=1, ticks_per_beat=480)
+    for name in track_names:
+        track = mido.MidiTrack()
+        track.append(mido.MetaMessage("track_name", name=name, time=0))
+        if name != "Conductor":
+            track.append(mido.Message("note_on", note=64, velocity=80, time=0))
+            track.append(mido.Message("note_off", note=64, velocity=0, time=480))
+        midi_file.tracks.append(track)
+    midi_file.save(path)

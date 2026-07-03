@@ -21,6 +21,7 @@ from arranger_core.schema import (
 from arranger_core.takes.models import ModelArtifactRecord
 
 TICKS_PER_BEAT_FALLBACK = 480
+MODEL_IMPORT_QUANTIZE_GRID = 0.25
 
 
 class ArtifactImportError(ValueError):
@@ -197,6 +198,14 @@ def _events_to_bars(
         if start >= expected:
             continue
         duration = min(duration, expected - start)
+        start, duration = _quantize_note_window(
+            start,
+            duration,
+            expected=expected,
+            grid=MODEL_IMPORT_QUANTIZE_GRID,
+        )
+        if duration <= 0:
+            continue
         notes_by_bar[bar_number].append(
             NoteEvent(
                 pitch=midi_to_note(int(note["note"]), prefer_sharps=False),
@@ -221,6 +230,24 @@ def _events_to_bars(
         )
         for bar_number in target_bars
     ]
+
+
+def _quantize_note_window(
+    start: float,
+    duration: float,
+    *,
+    expected: float,
+    grid: float,
+) -> tuple[float, float]:
+    if expected <= 0:
+        return 0.0, 0.0
+    quantized_start = round(start / grid) * grid
+    quantized_start = max(0.0, min(quantized_start, max(0.0, expected - grid)))
+    raw_end = min(expected, start + duration)
+    quantized_end = round(raw_end / grid) * grid
+    quantized_end = max(quantized_start + grid, quantized_end)
+    quantized_end = min(expected, quantized_end)
+    return round(quantized_start, 3), round(max(0.0, quantized_end - quantized_start), 3)
 
 
 def _midi_notes(midi_file: mido.MidiFile) -> list[dict[str, int]]:

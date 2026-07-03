@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import importlib
 import importlib.util
-import shutil
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
-
-import mido
 
 from model_backends.artifact import artifact_path, artifact_record
 from model_backends.base import ModelCapabilities, ModelGenerationRequest, ModelGenerationResult
@@ -16,11 +15,22 @@ from model_backends.errors import (
     UnsupportedModelTaskError,
 )
 
+ROOT = Path(__file__).resolve().parents[4]
+_REQUIRED_MODULES = (
+    "torch",
+    "transformers",
+    "sentencepiece",
+    "einops",
+    "jsonlines",
+    "accelerate",
+    "st_moe_pytorch",
+)
+
 
 class Text2MidiBackend:
     backend_id = "text2midi"
-    backend_version = "0.1.0"
-    unavailable_reason = "Text2MIDI is not installed"
+    backend_version = "0.2.0"
+    unavailable_reason = "Text2MIDI is not installed/configured"
     capabilities = ModelCapabilities(
         symbolic_midi=True,
         multitrack=False,
@@ -38,27 +48,66 @@ class Text2MidiBackend:
         *,
         backend_id: str | None = None,
         model_name: str = "text2midi",
+        repo_dir: str | Path | None = None,
+        checkpoint_dir: str | Path | None = None,
+        model_file: str | Path | None = None,
+        tokenizer_file: str | Path | None = None,
+        flan_tokenizer: str = "google/flan-t5-base",
+        wrapper_path: str | Path = "scripts/models/run_text2midi_inference.py",
         output_dir: str | Path = "outputs/model_artifacts/raw",
         install_hint: str | None = None,
+        execution_mode: str = "subprocess_or_worker",
+        device: str | None = None,
+        max_len: int = 2000,
+        temperature: float | None = None,
         **_: Any,
     ) -> None:
         if backend_id is not None:
             self.backend_id = backend_id
         self.model_name = model_name
-        self.output_dir = Path(output_dir)
-        self.install_hint = install_hint or "Install Text2MIDI in the model worker profile"
-        self._engine: Any | None = None
+        self.repo_dir = _resolve_project_path(
+            repo_dir or os.environ.get("TEXT2MIDI_REPO_DIR", "models/external_repos/text2midi")
+        )
+        self.checkpoint_dir = _resolve_project_path(
+            checkpoint_dir
+            or os.environ.get("TEXT2MIDI_CHECKPOINT_DIR", "models/checkpoints/text2midi")
+        )
+        self.model_file = str(
+            model_file
+            or os.environ.get("TEXT2MIDI_MODEL_FILE", "pytorch_model.bin")
+        )
+        self.tokenizer_file = str(
+            tokenizer_file
+            or os.environ.get("TEXT2MIDI_TOKENIZER_FILE", "vocab_remi.pkl")
+        )
+        self.flan_tokenizer = flan_tokenizer
+        self.wrapper_path = _resolve_project_path(wrapper_path)
+        self.output_dir = _resolve_project_path(output_dir)
+        self.install_hint = install_hint or (
+            "Clone https://github.com/AMAAI-Lab/text2midi into "
+            "models/external_repos/text2midi and download pytorch_model.bin/vocab_remi.pkl"
+        )
+        self.execution_mode = execution_mode
+        self.device = device or os.environ.get("AI_DEVICE", "auto")
+        self.max_len = int(max_len)
+        self.temperature = temperature
 
     def is_available(self) -> bool:
-        return (
-            importlib.util.find_spec("text2midi") is not None
-            or importlib.util.find_spec("text_to_midi") is not None
-        )
+        missing = self._missing_requirements()
+        if missing:
+            self.unavailable_reason = (
+                "Text2MIDI is not installed/configured. Missing: "
+                + ", ".join(missing)
+            )
+            return False
+        self.unavailable_reason = ""
+        return True
 
     def generate(self, request: ModelGenerationRequest) -> ModelGenerationResult:
         if request.task != "generate_full_sketch":
             raise UnsupportedModelTaskError("Text2MIDI only supports generate_full_sketch")
-        engine = self._load_engine()
+        self._ensure_available()
+
         output_path = artifact_path(
             self.output_dir,
             backend_id=self.backend_id,
@@ -67,165 +116,130 @@ class Text2MidiBackend:
             suffix=".mid",
             request_id=request.request_id,
         )
-        generated = self._run_engine(engine, request=request, output_path=output_path)
-        self._materialize_output(generated, output_path)
-        if not output_path.exists():
-            raise ModelGenerationError("Text2MIDI did not produce an output MIDI sketch")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        prompt = request.prompt or request.instruction or ""
+        temperature = (
+            request.temperature
+            if self.temperature is None
+            else self.temperature
+        )
+        cmd = [
+            sys.executable,
+            str(self.wrapper_path),
+            "--repo-dir",
+            str(self.repo_dir),
+            "--checkpoint-dir",
+            str(self.checkpoint_dir),
+            "--output",
+            str(output_path),
+            "--prompt",
+            prompt,
+            "--temperature",
+            str(temperature),
+            "--max-len",
+            str(self.max_len),
+            "--device",
+            self.device,
+            "--flan-tokenizer",
+            self.flan_tokenizer,
+            "--model-file",
+            self.model_file,
+            "--tokenizer-file",
+            self.tokenizer_file,
+        ]
+        if request.seed is not None:
+            cmd.extend(["--seed", str(request.seed)])
+
+        completed = subprocess.run(
+            cmd,
+            cwd=str(ROOT),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise ModelGenerationError(
+                "Text2MIDI subprocess failed"
+                f" (exit {completed.returncode})."
+                f" stdout={_tail(completed.stdout)!r}"
+                f" stderr={_tail(completed.stderr)!r}"
+            )
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            raise ModelGenerationError(
+                "Text2MIDI subprocess completed without producing a MIDI sketch."
+                f" stdout={_tail(completed.stdout)!r}"
+                f" stderr={_tail(completed.stderr)!r}"
+            )
+
+        metadata = {
+            "backend_id": self.backend_id,
+            "backend_version": self.backend_version,
+            "model_name": self.model_name,
+            "prompt": prompt,
+            "seed": request.seed,
+            "temperature": temperature,
+            "max_len": self.max_len,
+            "repo_dir": str(self.repo_dir),
+            "checkpoint_dir": str(self.checkpoint_dir),
+            "flan_tokenizer": self.flan_tokenizer,
+            "execution_mode": "subprocess",
+            "sketch_only": True,
+        }
         return ModelGenerationResult(
             backend_id=self.backend_id,
             task=request.task,
-            artifacts=[
-                artifact_record(
-                    "midi",
-                    output_path,
-                    metadata={
-                        "backend_id": self.backend_id,
-                        "backend_version": self.backend_version,
-                        "model_name": self.model_name,
-                        "prompt": request.prompt or request.instruction or "",
-                        "seed": request.seed,
-                        "sketch_only": True,
-                    },
-                )
-            ],
+            artifacts=[artifact_record("midi", output_path, metadata=metadata)],
             confidence=None,
             raw_metadata={
                 "backend_version": self.backend_version,
                 "model_name": self.model_name,
                 "reproducibility": "best_effort",
+                "execution_mode": "subprocess",
                 "sketch_only": True,
             },
         )
 
-    def _load_engine(self) -> Any:
-        if self._engine is not None:
-            return self._engine
+    def _ensure_available(self) -> None:
         if not self.is_available():
             raise ModelBackendUnavailableError(
-                f"Text2MIDI is not installed. Install hint: {self.install_hint}"
+                f"{self.unavailable_reason}. Install hint: {self.install_hint}"
             )
 
-        last_error: Exception | None = None
-        for module_name in ("text2midi.inference", "text2midi", "text_to_midi"):
-            try:
-                module = importlib.import_module(module_name)
-            except ImportError as exc:
-                last_error = exc
-                continue
-            engine = self._engine_from_module(module)
-            if engine is not None:
-                self._engine = engine
-                return engine
-
-        raise ModelBackendUnavailableError(
-            f"Text2MIDI inference API is unavailable. Install hint: {self.install_hint}"
-        ) from last_error
-
-    def _engine_from_module(self, module: Any) -> Any | None:
-        for class_name in (
-            "Text2MidiPipeline",
-            "Text2MIDIPipeline",
-            "TextToMidiPipeline",
-            "Text2Midi",
-            "Text2MIDI",
-            "TextToMidi",
-        ):
-            engine_class = getattr(module, class_name, None)
-            if engine_class is None:
-                continue
-            try:
-                from_pretrained = getattr(engine_class, "from_pretrained", None)
-                if callable(from_pretrained):
-                    return from_pretrained(self.model_name)
-                return engine_class(self.model_name)
-            except TypeError:
-                try:
-                    return engine_class()
-                except Exception as exc:
-                    raise ModelGenerationError(
-                        f"Could not initialize Text2MIDI engine {class_name}"
-                    ) from exc
-            except Exception as exc:
-                raise ModelGenerationError(
-                    f"Could not load Text2MIDI model {self.model_name!r}"
-                ) from exc
-
-        if any(callable(getattr(module, name, None)) for name in _GENERATION_METHODS):
-            return module
-        return None
-
-    def _run_engine(
-        self,
-        engine: Any,
-        *,
-        request: ModelGenerationRequest,
-        output_path: Path,
-    ) -> Any:
-        payload = {
-            "prompt": request.prompt or request.instruction or "",
-            "seed": request.seed,
-            "temperature": request.temperature,
-            "style": request.style,
-            "output_path": str(output_path),
-            "task": request.task,
-        }
-        for method_name in _GENERATION_METHODS:
-            method = getattr(engine, method_name, None)
-            if not callable(method):
-                continue
-            try:
-                return method(**payload)
-            except TypeError:
-                try:
-                    return method(
-                        payload["prompt"],
-                        output_path=str(output_path),
-                        seed=request.seed,
-                    )
-                except TypeError:
-                    try:
-                        return method(payload["prompt"])
-                    except TypeError:
-                        try:
-                            return method(payload)
-                        except TypeError:
-                            continue
-            except Exception as exc:
-                raise ModelGenerationError(f"Text2MIDI generation failed: {exc}") from exc
-        raise ModelGenerationError("Text2MIDI engine exposes no supported generation method")
-
-    def _materialize_output(self, generated: Any, output_path: Path) -> None:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        if generated is None:
-            return
-        if isinstance(generated, mido.MidiFile):
-            generated.save(output_path)
-            return
-        if isinstance(generated, bytes):
-            output_path.write_bytes(generated)
-            return
-        if isinstance(generated, str | Path):
-            generated_path = Path(generated)
-            if generated_path.exists():
-                if generated_path.resolve() != output_path.resolve():
-                    shutil.copy2(generated_path, output_path)
-                return
-        if isinstance(generated, dict):
-            for key in ("midi_path", "path", "output_path"):
-                value = generated.get(key)
-                if value:
-                    self._materialize_output(value, output_path)
-                    return
-            midi_bytes = generated.get("midi_bytes")
-            if isinstance(midi_bytes, bytes):
-                output_path.write_bytes(midi_bytes)
-                return
-        raise ModelGenerationError("Text2MIDI returned an unsupported artifact payload")
+    def _missing_requirements(self) -> list[str]:
+        missing: list[str] = []
+        if not self.wrapper_path.exists():
+            missing.append(str(self.wrapper_path))
+        if not self.repo_dir.exists():
+            missing.append(str(self.repo_dir))
+        if not (self.repo_dir / "model" / "transformer_model.py").exists():
+            missing.append(str(self.repo_dir / "model" / "transformer_model.py"))
+        model_path = _resolve_checkpoint_file(self.checkpoint_dir, self.model_file)
+        tokenizer_path = _resolve_checkpoint_file(self.checkpoint_dir, self.tokenizer_file)
+        if not model_path.exists():
+            missing.append(str(model_path))
+        if not tokenizer_path.exists():
+            missing.append(str(tokenizer_path))
+        for module_name in _REQUIRED_MODULES:
+            if importlib.util.find_spec(module_name) is None:
+                missing.append(f"python module {module_name}")
+        return missing
 
 
-_GENERATION_METHODS = (
-    "generate_full_sketch",
-    "text_to_midi",
-    "generate_midi",
-    "generate",
-)
+def _resolve_project_path(value: str | Path) -> Path:
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else (ROOT / path).resolve()
+
+
+def _resolve_checkpoint_file(checkpoint_dir: Path, value: str | Path) -> Path:
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return path
+    if path.parent != Path("."):
+        return (ROOT / path).resolve()
+    return checkpoint_dir / path
+
+
+def _tail(value: str, limit: int = 4000) -> str:
+    if len(value) <= limit:
+        return value
+    return value[-limit:]

@@ -1,0 +1,31 @@
+# Add these targets to the existing Makefile.
+
+models-bootstrap:
+	python scripts/models/ensure_local_model_dirs.py
+
+models-check:
+	python scripts/models/check_local_model_runtime.py --config configs/local_model_runtime.yaml
+
+midigpt-download:
+	python scripts/models/download_midigpt.py --model-name $${MIDIGPT_MODEL_NAME:-yellow}
+
+midigpt-smoke:
+	python scripts/models/smoke_midigpt.py --model-name $${MIDIGPT_MODEL_NAME:-yellow}
+
+text2midi-download:
+	python scripts/models/download_text2midi.py --checkpoint-dir models/checkpoints/text2midi
+
+text2midi-smoke:
+	python scripts/models/smoke_text2midi.py --allow-check-only
+
+ollama-planner-smoke:
+	python scripts/models/smoke_ollama_planner.py --model $${OLLAMA_PLANNER_MODEL:-qwen3:8b}
+
+ai-local-smoke:
+	python scripts/models/ai_local_smoke.py
+
+professional-benchmark:
+	python scripts/models/professional_generation_benchmark.py --config configs/professional_benchmarks.yaml
+
+model-worker:
+	python -m uvicorn app.main:app --app-dir apps/model_worker --reload --port 8010

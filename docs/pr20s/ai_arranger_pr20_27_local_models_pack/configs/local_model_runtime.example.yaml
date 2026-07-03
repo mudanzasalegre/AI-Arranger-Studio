@@ -1,0 +1,81 @@
+schema_version: 0.1.0
+runtime:
+  models_root: ./models
+  outputs_root: ./outputs
+  artifact_root: ./outputs/model_artifacts
+  api_storage: ./outputs/api
+  device: auto
+  offline_after_download: false
+  forbid_audio_models: true
+  require_artifact_quarantine: true
+  require_take_acceptance: true
+
+huggingface:
+  hf_home: ./models/hf_cache
+  hf_hub_cache: ./models/hf_cache/hub
+  hf_assets_cache: ./models/hf_cache/assets
+  disable_telemetry: true
+  offline: false
+
+worker:
+  enabled: false
+  host: 127.0.0.1
+  port: 8010
+  base_url: http://127.0.0.1:8010
+  load_heavy_models_in_api_process: false
+  notes:
+    - For development, API can call local backends directly.
+    - For stable operation, heavy torch models should run in apps/model_worker.
+
+planner:
+  provider: ollama
+  enabled: false
+  base_url: http://127.0.0.1:11434/api
+  model: qwen3:8b
+  timeout_seconds: 120
+  json_only: true
+  fallback_rule_based: true
+
+midigpt:
+  enabled: false
+  model_name: yellow
+  local_checkpoint: null
+  install_hint: pip install "midigpt[inference]"
+  cache_dir: ./models/hf_cache/hub
+  output_dir: ./outputs/model_artifacts/raw
+  default_inference:
+    model_dim: 8
+    temperature: 1.0
+    top_p: 0.95
+    mask_mode: attention
+    polyphony_hard_limit: 4
+
+text2midi:
+  enabled: false
+  repo_url: https://github.com/AMAAI-Lab/text2midi
+  repo_dir: ./models/external_repos/text2midi
+  checkpoint_dir: ./models/checkpoints/text2midi
+  model_file: pytorch_model.bin
+  tokenizer_file: vocab_remi.pkl
+  flan_tokenizer: google/flan-t5-base
+  execution_mode: subprocess_or_worker
+  output_dir: ./outputs/model_artifacts/raw
+
+training:
+  enabled: false
+  tokenized_data_root: ./data/processed/tokenized
+  custom_model_root: ./models/checkpoints/custom
+  roles:
+    - melody
+    - walking_bass
+    - piano_comping
+    - horn_responses
+    - drums
+  tokenizer:
+    library: miditok
+    tokenization: REMI
+    beat_resolution:
+      0_4: 8
+      4_12: 4
+    use_bpe: true
+    vocab_size: 12000

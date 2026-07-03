@@ -1,0 +1,129 @@
+schema_version: 0.1.0
+updated_by: AI Arranger Studio local model pack
+models:
+  - id: midigpt-yellow
+    backend: midigpt
+    source: huggingface
+    repo_id: Metacreation/MIDI-GPT
+    model_name: yellow
+    local_cache: ./models/hf_cache/hub
+    local_checkpoint: null
+    license: review_required
+    commercial_use: review_required
+    status: planned
+    tasks:
+      - infill_bars
+      - generate_track
+      - continue_section
+      - generate_variation
+    acceptance:
+      - engine_loads
+      - output_midi_created
+      - artifact_quarantine_passes
+      - take_created_not_auto_accepted
+      - validation_blocks_bad_ranges
+
+  - id: text2midi-base
+    backend: text2midi
+    source: github_and_huggingface
+    repo_url: https://github.com/AMAAI-Lab/text2midi
+    repo_id: amaai-lab/text2midi
+    repo_dir: ./models/external_repos/text2midi
+    checkpoint_dir: ./models/checkpoints/text2midi
+    files:
+      - pytorch_model.bin
+      - vocab_remi.pkl
+    commercial_use: review_required
+    status: planned
+    tasks:
+      - generate_full_sketch
+    acceptance:
+      - checkpoint_files_exist
+      - sketch_midi_created
+      - sketch_imported_as_uncertain_or_validated
+      - sketch_never_auto_promoted_to_final_project
+
+  - id: local-llm-planner-qwen3-8b
+    backend: local_llm_planner
+    source: ollama
+    model_name: qwen3:8b
+    base_url: http://127.0.0.1:11434/api
+    commercial_use: review_required
+    status: planned
+    tasks:
+      - plan_song
+    acceptance:
+      - ollama_running
+      - json_schema_response_parses
+      - invalid_json_retries_once
+      - fallback_rule_based_works
+
+  - id: custom-jazz-melody-v001
+    backend: custom_role
+    role: melody
+    source: local_training
+    checkpoint_dir: ./models/checkpoints/custom/melody/jazz_melody_v001
+    model_file: model.safetensors
+    tokenizer_file: tokenizer.json
+    commercial_use: depends_on_training_manifest
+    status: unavailable_until_checkpoint
+    tasks:
+      - generate_track
+      - infill_bars
+      - generate_variation
+
+  - id: custom-jazz-walking-bass-v001
+    backend: custom_role
+    role: walking_bass
+    source: local_training
+    checkpoint_dir: ./models/checkpoints/custom/bass/jazz_walking_bass_v001
+    model_file: model.safetensors
+    tokenizer_file: tokenizer.json
+    commercial_use: depends_on_training_manifest
+    status: unavailable_until_checkpoint
+    tasks:
+      - generate_track
+      - infill_bars
+      - generate_variation
+
+  - id: custom-jazz-piano-comping-v001
+    backend: custom_role
+    role: piano_comping
+    source: local_training
+    checkpoint_dir: ./models/checkpoints/custom/piano_comping/jazz_piano_comping_v001
+    model_file: model.safetensors
+    tokenizer_file: tokenizer.json
+    commercial_use: depends_on_training_manifest
+    status: unavailable_until_checkpoint
+    tasks:
+      - generate_track
+      - infill_bars
+      - generate_variation
+
+  - id: custom-jazz-horns-v001
+    backend: custom_role
+    role: horn_responses
+    source: local_training
+    checkpoint_dir: ./models/checkpoints/custom/horns/jazz_horn_responses_v001
+    model_file: model.safetensors
+    tokenizer_file: tokenizer.json
+    commercial_use: depends_on_training_manifest
+    status: unavailable_until_checkpoint
+    tasks:
+      - generate_track
+      - infill_bars
+      - generate_variation
+
+  - id: custom-jazz-drums-v001
+    backend: custom_role
+    role: drums
+    source: local_training
+    checkpoint_dir: ./models/checkpoints/custom/drums/jazz_drums_v001
+    model_file: model.safetensors
+    tokenizer_file: tokenizer.json
+    commercial_use: depends_on_training_manifest
+    status: unavailable_until_checkpoint
+    tasks:
+      - generate_track
+      - infill_bars
+      - generate_variation

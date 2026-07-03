@@ -65,6 +65,24 @@ def test_llm_planner_falls_back_after_two_invalid_llm_outputs():
     assert result.song_plan.sections
 
 
+def test_llm_planner_falls_back_when_provider_raises():
+    project = generate_arrangement(
+        GenerationSpec(ensemble="jazz_sextet", form="minor_blues_12", seed=405),
+        project_id="planner-provider-error",
+    )
+
+    result = LlmPlanner(provider=_RaisingProvider()).plan(
+        prompt="hard bop plan",
+        project=project,
+    )
+
+    assert result.status == "ok"
+    assert result.planner == "fallback_rule_based"
+    assert result.fallback_used is True
+    assert [attempt.status for attempt in result.attempts] == ["fail", "fail", "pass"]
+    assert "provider_error" in result.attempts[0].error
+
+
 def test_plan_validator_rejects_locked_tracks_and_overlapping_sections():
     validator = PlanValidator()
     patch = json.loads(_valid_patch_json())
@@ -94,6 +112,17 @@ class _SequenceProvider:
     ) -> str:
         self.previous_errors.append(previous_error)
         return self.responses.pop(0)
+
+
+class _RaisingProvider:
+    def generate_plan_json(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str,
+        previous_error: str | None = None,
+    ) -> str:
+        raise RuntimeError("ollama offline")
 
 
 def _valid_patch_json() -> str:

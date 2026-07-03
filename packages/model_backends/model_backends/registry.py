@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -26,6 +26,7 @@ class RegisteredModelBackend(BaseModel):
     commercial_use: CommercialUse = "unknown"
     install_hint: str | None = None
     error: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ModelBackendRegistry:
@@ -45,6 +46,7 @@ class ModelBackendRegistry:
         commercial_use: CommercialUse | None = None,
         install_hint: str | None = None,
         error: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         backend_id = backend.backend_id
         if backend_id in self._records:
@@ -61,6 +63,7 @@ class ModelBackendRegistry:
             commercial_use=commercial_use or backend.capabilities.commercial_use,
             install_hint=install_hint,
             error=error,
+            metadata=metadata or {},
         )
 
     def register_configured(
@@ -76,6 +79,7 @@ class ModelBackendRegistry:
         commercial_use: CommercialUse = "unknown",
         install_hint: str | None = None,
         error: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         if backend_id in self._records:
             raise ModelBackendConfigurationError(f"Duplicate model backend id: {backend_id}")
@@ -90,6 +94,7 @@ class ModelBackendRegistry:
             commercial_use=commercial_use,
             install_hint=install_hint,
             error=error,
+            metadata=metadata or {},
         )
 
     def get(self, backend_id: str) -> MusicModelBackend:

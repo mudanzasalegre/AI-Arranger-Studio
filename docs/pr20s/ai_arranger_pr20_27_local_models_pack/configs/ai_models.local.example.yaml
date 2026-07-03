@@ -1,0 +1,109 @@
+# Copy this to configs/ai_models.local.yaml after PR-20.
+# Keep configs/ai_models.yaml as the safe default with mock backend enabled.
+
+backends:
+  mock_symbolic:
+    enabled: true
+    type: symbolic
+    adapter: model_backends.symbolic.mock_backend.MockSymbolicBackend
+    commercial_use: allowed
+    dependency_mode: builtin
+    tasks:
+      - infill_bars
+      - generate_track
+      - continue_section
+      - generate_variation
+      - generate_full_sketch
+      - plan_song
+    capabilities:
+      symbolic_midi: true
+      multitrack: true
+      bar_infill: true
+      track_generation: true
+      text_prompt: true
+      json_planning: true
+      token_output: true
+      supports_training: false
+      commercial_use: allowed
+
+  midigpt:
+    enabled: false
+    type: symbolic
+    adapter: model_backends.symbolic.midigpt_backend.MidiGptBackend
+    model_name: yellow
+    commercial_use: review_required
+    dependency_mode: optional
+    install_hint: pip install "midigpt[inference]"
+    output_dir: outputs/model_artifacts/raw
+    tasks:
+      - infill_bars
+      - generate_track
+      - continue_section
+      - generate_variation
+    capabilities:
+      symbolic_midi: true
+      multitrack: true
+      bar_infill: true
+      track_generation: true
+      text_prompt: false
+      json_planning: false
+      token_output: false
+      supports_training: true
+      commercial_use: review_required
+
+  text2midi:
+    enabled: false
+    type: symbolic
+    adapter: model_backends.symbolic.text2midi_backend.Text2MidiBackend
+    model_name: text2midi
+    commercial_use: review_required
+    dependency_mode: optional
+    execution_mode: worker_or_subprocess
+    install_hint: clone https://github.com/AMAAI-Lab/text2midi into models/external_repos/text2midi and download pytorch_model.bin/vocab_remi.pkl
+    output_dir: outputs/model_artifacts/raw
+    tasks:
+      - generate_full_sketch
+    capabilities:
+      symbolic_midi: true
+      multitrack: false
+      bar_infill: false
+      track_generation: false
+      text_prompt: true
+      json_planning: false
+      token_output: false
+      supports_training: true
+      commercial_use: review_required
+
+  local_llm_planner:
+    enabled: false
+    type: planner
+    adapter: model_backends.planner.ollama_planner_backend.OllamaPlannerBackend
+    provider: ollama
+    base_url: http://127.0.0.1:11434/api
+    model_name: qwen3:8b
+    commercial_use: review_required
+    dependency_mode: optional
+    install_hint: install Ollama, run `ollama pull qwen3:8b`, then enable this backend after PR-23
+    tasks:
+      - plan_song
+    capabilities:
+      symbolic_midi: false
+      multitrack: false
+      bar_infill: false
+      track_generation: false
+      text_prompt: true
+      json_planning: true
+      token_output: false
+      supports_training: false
+      commercial_use: review_required
+
+settings:
+  forbid_audio_models: true
+  artifact_quarantine_required: true
+  require_take_acceptance: true
+  default_max_ai_attempts: 3
+  export_pending_takes: false
+  artifact_raw_dir: outputs/model_artifacts/raw
+  artifact_imported_dir: outputs/model_artifacts/imported
+  artifact_rejected_dir: outputs/model_artifacts/rejected
+  artifact_validated_dir: outputs/model_artifacts/validated

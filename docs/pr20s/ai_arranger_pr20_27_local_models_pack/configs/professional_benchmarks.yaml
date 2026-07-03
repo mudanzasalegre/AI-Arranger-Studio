@@ -1,0 +1,75 @@
+schema_version: 0.1.0
+output_root: outputs/professional_benchmark
+benchmarks:
+  - id: hard_bop_minor_blues_sextet
+    prompt: >-
+      hard bop nocturno en Do menor, 132 bpm, blues menor de 12 compases,
+      sexteto con saxo alto, trompeta, trombón, piano, contrabajo y batería,
+      bajo caminante, piano rootless, batería swing y shout chorus final
+    seed: 2701
+    required_tracks:
+      - drums
+      - double_bass
+      - piano
+      - alto_sax
+      - trumpet
+      - trombone
+    ai_infill_targets:
+      - track_id: alto_sax
+        bars: [5, 6, 7, 8]
+        instruction: bebop phrase, medium density, resolve clearly into bar 9
+      - track_id: trumpet
+        bars: [9, 10, 11, 12]
+        instruction: short syncopated horn responses, avoid extreme register
+
+  - id: bebop_blues_quintet
+    prompt: >-
+      bebop blues en Fa, 184 bpm, quinteto con saxo alto, trompeta, piano,
+      contrabajo y batería, líneas ágiles, hits de metales y walking bass
+    seed: 2702
+    required_tracks: [drums, double_bass, piano, alto_sax, trumpet]
+    ai_infill_targets:
+      - track_id: alto_sax
+        bars: [1, 2, 3, 4]
+        instruction: agile bebop head, clear motivic contour, playable sax range
+
+  - id: modal_jazz_quartet
+    prompt: >-
+      jazz modal en Re dórico, 112 bpm, cuarteto con saxo tenor, piano,
+      contrabajo y batería, vamp amplio, voicings cuartales y espacio
+    seed: 2703
+    required_tracks: [drums, double_bass, piano, tenor_sax]
+    ai_infill_targets:
+      - track_id: piano
+        bars: [9, 10, 11, 12]
+        instruction: sparse quartal comping, leave space, no low register mud
+
+  - id: jazz_ballad_trio
+    prompt: >-
+      balada jazz en Mi bemol mayor, 72 bpm, trío de piano, contrabajo y batería,
+      armonía rica, voicings abiertos, escobillas y respiración amplia
+    seed: 2704
+    required_tracks: [drums, double_bass, piano]
+    ai_infill_targets:
+      - track_id: piano
+        bars: [5, 6, 7, 8]
+        instruction: lyrical ballad voicings, gentle rhythmic movement
+
+  - id: bossa_quartet
+    prompt: >-
+      bossa nova jazz en Sol mayor, 126 bpm, cuarteto con flauta, piano,
+      contrabajo y batería, bajo bossa, comping sincopado y melodía suave
+    seed: 2705
+    required_tracks: [drums, double_bass, piano, flute]
+    ai_infill_targets:
+      - track_id: flute
+        bars: [1, 2, 3, 4]
+        instruction: lyrical bossa melody, light articulation, breathable phrases
+quality_gates:
+  validation_errors_max: 0
+  validation_warnings_max: 25
+  min_tracks: 3
+  require_full_midi: true
+  require_musicxml: true
+  require_model_trace_if_ai_used: true
+  require_no_pending_takes_in_export: true

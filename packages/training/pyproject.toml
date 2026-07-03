@@ -1,7 +1,10 @@
 [project]
 name = "arranger-training"
 version = "0.1.0"
-dependencies = ["dataset-tools", "pydantic"]
+dependencies = ["dataset-tools", "mido", "pydantic"]
+
+[project.optional-dependencies]
+ai = ["miditok==3.0.3", "symusic==0.5.5"]
 
 [build-system]
 requires = ["setuptools>=68"]

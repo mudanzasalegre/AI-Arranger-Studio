@@ -42,6 +42,25 @@ class BackendConfig(BaseModel):
             kwargs["install_hint"] = self.install_hint
         return kwargs
 
+    def registry_metadata(self) -> dict[str, Any]:
+        extra = dict(self.model_extra or {})
+        return {
+            key: value
+            for key, value in extra.items()
+            if key
+            not in {
+                "base_url",
+                "execution_mode",
+                "flan_tokenizer",
+                "max_len",
+                "num_ctx",
+                "provider",
+                "temperature",
+                "timeout_seconds",
+                "wrapper_path",
+            }
+        }
+
 
 class AIModelsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -100,6 +119,7 @@ def build_model_backend_registry(
                     tasks=backend_config.tasks,
                     commercial_use=backend_config.commercial_use,
                     install_hint=backend_config.install_hint,
+                    metadata=backend_config.registry_metadata(),
                 )
             continue
 
@@ -122,6 +142,11 @@ def build_model_backend_registry(
                 )
                 if not include_unavailable:
                     continue
+            commercial_use = (
+                None
+                if backend_config.commercial_use == "unknown"
+                else backend_config.commercial_use
+            )
             registry.register(
                 backend,
                 status=status,
@@ -129,9 +154,10 @@ def build_model_backend_registry(
                 enabled=True,
                 adapter=backend_config.adapter,
                 tasks=backend_config.tasks,
-                commercial_use=backend_config.commercial_use,
+                commercial_use=commercial_use,
                 install_hint=backend_config.install_hint,
                 error=error,
+                metadata=_backend_registry_metadata(backend, backend_config),
             )
         except Exception as exc:
             if not include_unavailable:
@@ -147,6 +173,7 @@ def build_model_backend_registry(
                 commercial_use=backend_config.commercial_use,
                 install_hint=backend_config.install_hint,
                 error=str(exc),
+                metadata=backend_config.registry_metadata(),
             )
 
     return registry
@@ -164,3 +191,10 @@ def _import_adapter(adapter_path: str) -> type[Any]:
     if not isinstance(adapter, type):
         raise ModelBackendConfigurationError(f"Adapter is not a class: {adapter_path}")
     return adapter
+
+
+def _backend_registry_metadata(backend: Any, config: BackendConfig) -> dict[str, Any]:
+    metadata = getattr(backend, "registry_metadata", None)
+    if isinstance(metadata, dict):
+        return metadata
+    return config.registry_metadata()

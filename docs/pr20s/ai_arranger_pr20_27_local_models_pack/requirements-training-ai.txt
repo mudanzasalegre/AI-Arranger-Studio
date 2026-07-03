@@ -1,0 +1,10 @@
+# Optional training/tokenization dependencies for PR-24+.
+miditok
+symusic
+datasets
+accelerate
+safetensors
+tokenizers
+numpy
+pandas
+scikit-learn

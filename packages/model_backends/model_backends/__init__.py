@@ -13,6 +13,14 @@ from model_backends.config import (
     build_model_backend_registry,
     load_ai_models_config,
 )
+from model_backends.custom_role import (
+    CUSTOM_ROLE_MODEL_VERSION,
+    CustomRoleModelBackend,
+    CustomRoleModelInspection,
+    CustomRoleModelSpec,
+    DummyCustomRoleModelBackend,
+    inspect_custom_role_model,
+)
 from model_backends.errors import (
     ModelBackendConfigurationError,
     ModelBackendError,
@@ -28,6 +36,11 @@ __version__ = MODEL_BACKENDS_CONTRACT_VERSION
 __all__ = [
     "AIModelsConfig",
     "BackendConfig",
+    "CUSTOM_ROLE_MODEL_VERSION",
+    "CustomRoleModelBackend",
+    "CustomRoleModelInspection",
+    "CustomRoleModelSpec",
+    "DummyCustomRoleModelBackend",
     "MODEL_BACKENDS_CONTRACT_VERSION",
     "MockSymbolicBackend",
     "ModelArtifact",
@@ -45,5 +58,6 @@ __all__ = [
     "UnsupportedModelTaskError",
     "__version__",
     "build_model_backend_registry",
+    "inspect_custom_role_model",
     "load_ai_models_config",
 ]

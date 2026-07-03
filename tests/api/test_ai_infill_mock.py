@@ -3,9 +3,12 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import sys
+import types
 import zipfile
 from pathlib import Path
 
+import mido
 from app.main import app
 from arranger_core import ArrangementProject
 from fastapi.testclient import TestClient
@@ -252,6 +255,87 @@ settings:
     assert "MIDI-GPT is not installed" in response.json()["detail"]
 
 
+def test_ai_infill_midigpt_real_api_creates_pending_take_without_mutating_project(
+    tmp_path,
+    monkeypatch,
+):
+    calls: dict[str, object] = {}
+    _install_fake_midigpt(monkeypatch, calls)
+    monkeypatch.setenv("AI_ARRANGER_API_STORAGE", str(tmp_path / "api-storage"))
+    config_path = tmp_path / "ai_models.yaml"
+    config_path.write_text(
+        """
+backends:
+  midigpt:
+    enabled: true
+    type: symbolic
+    adapter: model_backends.symbolic.midigpt_backend.MidiGptBackend
+    model_name: yellow
+    output_dir: outputs/model_artifacts/raw
+    commercial_use: review_required
+    dependency_mode: optional
+    install_hint: pip install "midigpt[inference]"
+    tasks:
+      - infill_bars
+    capabilities:
+      symbolic_midi: true
+      multitrack: true
+      bar_infill: true
+      track_generation: true
+      commercial_use: review_required
+settings:
+  artifact_raw_dir: outputs/model_artifacts/raw
+""".lstrip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AI_MODELS_CONFIG", str(config_path))
+
+    client = TestClient(app)
+    project_id = "api-ai-infill-midigpt-real"
+    _generate_project(client, project_id, seed=507)
+    project_dir = tmp_path / "api-storage" / "projects" / project_id
+    before = ArrangementProject.load_json(project_dir / "arrangement_project.json")
+    before_tracks = [track.model_dump(mode="json") for track in before.tracks]
+
+    response = client.post(
+        f"/v1/projects/{project_id}/ai/infill",
+        json={
+            "backend": "midigpt",
+            "track_id": "alto_sax",
+            "bars": [1],
+            "instruction": "bebop phrase, medium density, clear cadence",
+            "temperature": 0.9,
+            "seed": 2101,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "pending_take"
+    assert payload["backend"] == "midigpt"
+    assert payload["artifact"]["status"] == "validated"
+    assert payload["take"]["metadata"]["model_trace"]["backend"] == "midigpt"
+    assert payload["take"]["metadata"]["model_trace"]["commercial_use"] == "review_required"
+    assert payload["take"]["metadata"]["model_trace"]["bars"] == [1]
+
+    active_after = ArrangementProject.load_json(project_dir / "arrangement_project.json")
+    assert [track.model_dump(mode="json") for track in active_after.tracks] == before_tracks
+    candidate = ArrangementProject.load_json(payload["take"]["project_snapshot_path"])
+    _assert_only_target_bar_changed(before, candidate, track_id="alto_sax", bars={1})
+
+    context_track_names = calls["context_track_names"]
+    assert "alto_sax" in context_track_names
+    assert calls["track_prompt"] == {
+        "id": [name for name in context_track_names if name != "Conductor"].index("alto_sax"),
+        "bars": [0],
+        "ignore": False,
+    }
+    ignored_prompts = [prompt for prompt in calls["track_prompts"] if prompt["ignore"]]
+    assert len(ignored_prompts) == len(context_track_names) - 2
+    assert calls["inference_config"]["temperature"] == 0.9
+    assert calls["inference_config"]["top_p"] == 0.95
+
+
 def _generate_project(client: TestClient, project_id: str, *, seed: int = 500) -> None:
     response = client.post(
         "/v1/projects/generate",
@@ -269,6 +353,99 @@ def _artifact_records(tmp_path: Path) -> list[dict]:
     manifest_path = tmp_path / "api-storage" / "model_artifacts" / "artifact_manifest.json"
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     return payload["artifacts"]
+
+
+def _install_fake_midigpt(monkeypatch, calls: dict[str, object]) -> None:
+    real_find_spec = importlib.util.find_spec
+
+    def fake_find_spec(name: str, *args, **kwargs):
+        if name == "midigpt":
+            return object()
+        return real_find_spec(name, *args, **kwargs)
+
+    class FakeTrack:
+        def __init__(self, name: str):
+            self.name = name
+
+    class FakeScore:
+        def __init__(self, tracks: list[FakeTrack]):
+            self.tracks = tracks
+
+        @classmethod
+        def from_midi(cls, path: str):
+            midi_file = mido.MidiFile(path)
+            track_names = _midi_track_names(midi_file)
+            calls["context_track_names"] = track_names
+            return cls([FakeTrack(name) for name in track_names if name != "Conductor"])
+
+    class FakeInferenceConfig:
+        def __init__(self, **kwargs):
+            calls["inference_config"] = kwargs
+
+    class FakeTrackPrompt:
+        def __init__(self, *, id: int, bars: list[int], ignore: bool = False):
+            prompt = {"id": id, "bars": bars, "ignore": ignore}
+            calls.setdefault("track_prompts", []).append(prompt)
+            if not ignore:
+                calls["track_prompt"] = prompt
+
+    class FakeGenerationRequest:
+        def __init__(self, *, tracks, config):
+            calls["generation_request"] = {"tracks": tracks, "config": config}
+
+    class FakeResult:
+        def __init__(self, track_count: int):
+            self.track_count = track_count
+
+        def to_midi(self, path: str) -> None:
+            midi_file = mido.MidiFile(type=1, ticks_per_beat=480)
+            for index in range(self.track_count):
+                track = mido.MidiTrack()
+                track.append(mido.MetaMessage("track_name", name=f"midigpt:{index}", time=0))
+                track.append(mido.Message("note_on", note=64, velocity=84, channel=0, time=0))
+                track.append(mido.Message("note_off", note=64, velocity=0, channel=0, time=480))
+                midi_file.tracks.append(track)
+            midi_file.save(path)
+
+    class FakeSession:
+        def __init__(self, track_count: int):
+            self.track_count = track_count
+
+        def run(self):
+            return FakeResult(self.track_count)
+
+    class FakeInferenceEngine:
+        @classmethod
+        def from_pretrained(cls, model_name: str):
+            calls["model_name"] = model_name
+            return cls()
+
+        def session(self, score, request):
+            calls["session"] = {"score": score, "request": request}
+            return FakeSession(len(score.tracks))
+
+    monkeypatch.setattr(importlib.util, "find_spec", fake_find_spec)
+    midigpt_module = types.ModuleType("midigpt")
+    midigpt_module.Score = FakeScore
+    inference_module = types.ModuleType("midigpt.inference")
+    inference_module.InferenceEngine = FakeInferenceEngine
+    inference_module.GenerationRequest = FakeGenerationRequest
+    inference_module.InferenceConfig = FakeInferenceConfig
+    inference_module.TrackPrompt = FakeTrackPrompt
+    monkeypatch.setitem(sys.modules, "midigpt", midigpt_module)
+    monkeypatch.setitem(sys.modules, "midigpt.inference", inference_module)
+
+
+def _midi_track_names(midi_file: mido.MidiFile) -> list[str]:
+    names: list[str] = []
+    for index, track in enumerate(midi_file.tracks):
+        name = ""
+        for message in track:
+            if getattr(message, "type", None) == "track_name":
+                name = str(message.name)
+                break
+        names.append(name or f"track_{index}")
+    return names
 
 
 def _assert_only_target_bar_changed(
