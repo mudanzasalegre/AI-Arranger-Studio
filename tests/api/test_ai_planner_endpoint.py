@@ -130,7 +130,8 @@ def test_ai_plan_endpoint_falls_back_when_enabled_local_planner_unavailable(
     payload = plan_response.json()
     assert payload["planner"] == "fallback_rule_based"
     assert payload["fallback_used"] is True
-    assert [attempt["status"] for attempt in payload["attempts"]] == ["fail", "fail", "pass"]
+    assert [attempt["status"] for attempt in payload["attempts"]] == ["pass"]
+    assert [attempt["source"] for attempt in payload["attempts"]] == ["fallback_rule_based"]
 
 
 def _generate_project(client: TestClient, tmp_path, project_id: str):

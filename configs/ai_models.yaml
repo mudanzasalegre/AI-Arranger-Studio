@@ -107,7 +107,7 @@ backends:
   custom_jazz_melody_v001:
     enabled: true
     type: custom_role
-    adapter: model_backends.custom_role.dummy_backend.DummyCustomRoleModelBackend
+    adapter: model_backends.custom_role.statistical_backend.StatisticalCustomRoleBackend
     role: melody
     checkpoint_dir: models/checkpoints/custom/melody/jazz_melody_v001
     commercial_use: unknown
@@ -131,7 +131,7 @@ backends:
   custom_jazz_walking_bass_v001:
     enabled: true
     type: custom_role
-    adapter: model_backends.custom_role.dummy_backend.DummyCustomRoleModelBackend
+    adapter: model_backends.custom_role.statistical_backend.StatisticalCustomRoleBackend
     role: walking_bass
     checkpoint_dir: models/checkpoints/custom/bass/jazz_walking_bass_v001
     commercial_use: unknown
@@ -155,7 +155,7 @@ backends:
   custom_jazz_piano_comping_v001:
     enabled: true
     type: custom_role
-    adapter: model_backends.custom_role.dummy_backend.DummyCustomRoleModelBackend
+    adapter: model_backends.custom_role.statistical_backend.StatisticalCustomRoleBackend
     role: piano_comping
     checkpoint_dir: models/checkpoints/custom/piano_comping/jazz_piano_comping_v001
     commercial_use: unknown
@@ -179,7 +179,7 @@ backends:
   custom_jazz_horn_responses_v001:
     enabled: true
     type: custom_role
-    adapter: model_backends.custom_role.dummy_backend.DummyCustomRoleModelBackend
+    adapter: model_backends.custom_role.statistical_backend.StatisticalCustomRoleBackend
     role: horn_responses
     checkpoint_dir: models/checkpoints/custom/horns/jazz_horn_responses_v001
     commercial_use: unknown
@@ -203,7 +203,7 @@ backends:
   custom_jazz_drums_v001:
     enabled: true
     type: custom_role
-    adapter: model_backends.custom_role.dummy_backend.DummyCustomRoleModelBackend
+    adapter: model_backends.custom_role.statistical_backend.StatisticalCustomRoleBackend
     role: drums
     checkpoint_dir: models/checkpoints/custom/drums/jazz_drums_v001
     commercial_use: unknown

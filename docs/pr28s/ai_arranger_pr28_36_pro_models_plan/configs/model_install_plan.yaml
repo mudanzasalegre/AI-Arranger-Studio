@@ -1,0 +1,64 @@
+schema_version: 0.1.0
+profile: pro
+
+pip:
+  base:
+    - requirements.txt
+  ai:
+    - requirements-ai.txt
+  training:
+    - requirements-training-ai.txt
+
+directories:
+  - models/hf_cache/hub
+  - models/hf_cache/assets
+  - models/external_repos
+  - models/checkpoints/text2midi
+  - models/checkpoints/custom/melody/jazz_melody_v001
+  - models/checkpoints/custom/bass/jazz_walking_bass_v001
+  - models/checkpoints/custom/piano_comping/jazz_piano_comping_v001
+  - models/checkpoints/custom/horns/jazz_horn_responses_v001
+  - models/checkpoints/custom/drums/jazz_drums_v001
+  - models/manifests
+  - outputs/model_artifacts/raw
+  - outputs/model_artifacts/imported
+  - outputs/model_artifacts/rejected
+  - outputs/model_artifacts/validated
+  - outputs/model_smoke
+  - outputs/pro_benchmarks
+
+models:
+  midigpt:
+    enabled: true
+    install: pip_extra
+    package: midigpt[inference]
+    model_name: yellow
+    smoke: python scripts/models/smoke_midigpt.py
+
+  text2midi:
+    enabled: true
+    install: git_and_hf
+    repo_url: https://github.com/AMAAI-Lab/text2midi
+    repo_dir: models/external_repos/text2midi
+    hf_repo_id: amaai-lab/text2midi
+    files:
+      - pytorch_model.bin
+      - vocab_remi.pkl
+    smoke: python scripts/models/smoke_text2midi.py
+
+  ollama_planner:
+    enabled: true
+    install: external_app
+    model_name: qwen3:8b
+    check_commands:
+      - ollama --version
+      - ollama pull qwen3:8b
+    smoke: python scripts/models/smoke_ollama_planner.py
+
+  miditok:
+    enabled: true
+    install: pip
+    packages:
+      - miditok==3.0.3
+      - symusic==0.5.5
+    smoke: python scripts/models/smoke_miditok.py

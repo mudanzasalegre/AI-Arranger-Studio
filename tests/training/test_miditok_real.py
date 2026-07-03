@@ -57,17 +57,16 @@ def test_miditok_real_export_writes_role_dataset_and_blocks_license(tmp_path):
     assert Path(summary.summary_path).exists()
     assert Path(summary.tokenizer_path).exists()
     assert Path(summary.tokenizer_config_path).exists()
-    assert summary.train_segments == len(MIDITOK_TRAINING_ROLES)
-    assert summary.rejected_segments == len(MIDITOK_TRAINING_ROLES)
+    assert Path(summary.quality_report_path).exists()
+    assert summary.total_segments == len(MIDITOK_TRAINING_ROLES)
+    assert summary.rejected_sources == 1
+    assert summary.rejected_segments == 0
     assert summary.acceptable_information_loss is True
-    assert {segment.role for segment in segments if segment.split == "train"} == set(
+    assert {segment.role for segment in segments} == set(MIDITOK_TRAINING_ROLES)
+    assert {segment.source_file_id for segment in segments} == {"allowed_combo"}
+    assert sum(summary.split_counts[split] for split in ("train", "val", "test")) == len(
         MIDITOK_TRAINING_ROLES
     )
-    assert {
-        segment.source_file_id
-        for segment in segments
-        if segment.split == "rejected"
-    } == {"blocked_combo"}
     assert all(segment.token_count > 0 for segment in segments)
     assert all(Path(segment.reconstructed_midi_path or "").exists() for segment in segments)
     assert all(
@@ -76,7 +75,9 @@ def test_miditok_real_export_writes_role_dataset_and_blocks_license(tmp_path):
     )
     assert license_report["rejected_sources"][0]["source_file_id"] == "blocked_combo"
     for role in MIDITOK_TRAINING_ROLES:
-        assert (tmp_path / "tokenized" / role / "train.jsonl").exists()
+        for split in ("train", "val", "test"):
+            assert (tmp_path / "tokenized" / role / f"{split}.jsonl").exists()
+        assert (tmp_path / "tokenized" / role / "metadata.jsonl").exists()
 
 
 def test_miditok_real_converts_musicxml_to_midi(tmp_path):
@@ -112,7 +113,8 @@ def test_miditok_real_converts_musicxml_to_midi(tmp_path):
     )
     segments = load_miditok_segments(summary.tokenized_segments_path)
 
-    assert summary.train_segments == 1
+    assert summary.total_segments == 1
+    assert sum(summary.split_counts[split] for split in ("train", "val", "test")) == 1
     assert segments[0].role == "melody"
     assert segments[0].source_file_id == "musicxml_allowed"
     assert Path(segments[0].midi_path).exists()
@@ -130,6 +132,29 @@ def test_miditok_real_missing_dependency_is_controlled(monkeypatch):
 
     with pytest.raises(MidiTokUnavailableError):
         _ = MidiTokRealTokenizer().tokenizer
+
+
+def test_miditok_tokenizer_can_be_built_from_yaml_config(tmp_path):
+    config_path = tmp_path / "tokenizer.yaml"
+    config_path.write_text(
+        """
+tokenizer:
+  family: REMI
+  use_programs: true
+  use_tempos: true
+  use_time_signatures: true
+  beat_res:
+    0_4: 8
+    4_12: 4
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    tokenizer = MidiTokRealTokenizer.from_config(config_path)
+
+    assert tokenizer.tokenizer_family == "REMI"
+    assert tokenizer.beat_res == {(0, 4): 8, (4, 12): 4}
+    assert tokenizer.use_programs is True
 
 
 def _write_combo_midi(path: Path) -> None:

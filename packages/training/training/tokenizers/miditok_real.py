@@ -5,6 +5,7 @@ import importlib
 import json
 import warnings
 from collections import Counter
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -20,6 +21,9 @@ MIDITOK_TRAINING_ROLES: tuple[str, ...] = (
     "drums",
 )
 MIDITOK_TRAINING_SPLITS: tuple[str, ...] = ("train", "val", "test")
+DEFAULT_MIN_NOTES_PER_SOURCE = 2
+DEFAULT_MIN_DURATION_BEATS = 1.0
+DEFAULT_SUPPORTED_TIME_SIGNATURES = ("4/4", "3/4")
 
 BLOCKED_TRAINING_LICENSES = {
     "",
@@ -99,6 +103,15 @@ class MidiTokSource(TrainingTokenizerModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class MidiTokTokenizerSettings(TrainingTokenizerModel):
+    family: str = "REMI"
+    pitch_range: tuple[int, int] = (21, 109)
+    beat_res: dict[str, int] = Field(default_factory=lambda: {"0_4": 8, "4_12": 4})
+    use_programs: bool = True
+    use_tempos: bool = True
+    use_time_signatures: bool = True
+
+
 class MidiTokRoleSegment(TrainingTokenizerModel):
     id: str
     split: DatasetSplit
@@ -133,7 +146,10 @@ class MidiTokDatasetSummary(TrainingTokenizerModel):
     source_count: int
     total_segments: int
     train_segments: int
+    val_segments: int = 0
+    test_segments: int = 0
     rejected_segments: int
+    rejected_sources: int = 0
     role_counts: dict[str, int] = Field(default_factory=dict)
     split_counts: dict[str, int] = Field(default_factory=dict)
     output_dir: str
@@ -142,10 +158,15 @@ class MidiTokDatasetSummary(TrainingTokenizerModel):
     tokenized_segments_path: str
     metadata_path: str
     license_report_path: str
+    quality_report_path: str
     summary_path: str
     average_information_loss_ratio: float
     max_information_loss_ratio: float
     acceptable_information_loss: bool
+    min_quality: int = 3
+    min_notes_per_source: int = DEFAULT_MIN_NOTES_PER_SOURCE
+    min_duration_beats: float = DEFAULT_MIN_DURATION_BEATS
+    supported_time_signatures: list[str] = Field(default_factory=list)
 
 
 class MidiTokRealTokenizer:
@@ -171,6 +192,22 @@ class MidiTokRealTokenizer:
         self.use_tempos = use_tempos
         self.use_time_signatures = use_time_signatures
         self._tokenizer: Any | None = None
+
+    @classmethod
+    def from_config(cls, config: Mapping[str, Any] | str | Path) -> MidiTokRealTokenizer:
+        raw = _load_tokenizer_config(config)
+        tokenizer_config = raw.get("tokenizer", raw)
+        if not isinstance(tokenizer_config, Mapping):
+            raise ValueError("MidiTok tokenizer config must be a mapping")
+        settings = MidiTokTokenizerSettings.model_validate(dict(tokenizer_config))
+        return cls(
+            tokenizer_family=settings.family,
+            pitch_range=settings.pitch_range,
+            beat_res=_parse_beat_res(settings.beat_res),
+            use_programs=settings.use_programs,
+            use_tempos=settings.use_tempos,
+            use_time_signatures=settings.use_time_signatures,
+        )
 
     @property
     def tokenizer(self) -> Any:
@@ -263,6 +300,11 @@ def export_miditok_role_dataset(
     roles: tuple[str, ...] = MIDITOK_TRAINING_ROLES,
     tokenizer: MidiTokRealTokenizer | None = None,
     max_acceptable_loss_ratio: float = 0.25,
+    min_quality: int = 3,
+    min_notes_per_source: int = DEFAULT_MIN_NOTES_PER_SOURCE,
+    min_duration_beats: float = DEFAULT_MIN_DURATION_BEATS,
+    supported_time_signatures: tuple[str, ...] = DEFAULT_SUPPORTED_TIME_SIGNATURES,
+    enforce_information_loss_threshold: bool = True,
 ) -> MidiTokDatasetSummary:
     tokenizer = tokenizer or MidiTokRealTokenizer()
     selected_roles = tuple(role for role in roles if role in MIDITOK_TRAINING_ROLES)
@@ -275,13 +317,7 @@ def export_miditok_role_dataset(
     reconstructed_dir = manifest_dir / "reconstructed"
     for path in (manifest_dir, isolated_dir, reconstructed_dir):
         path.mkdir(parents=True, exist_ok=True)
-    for role in selected_roles:
-        role_dir = output_path / role
-        role_dir.mkdir(parents=True, exist_ok=True)
-        for filename in ("train.jsonl", "val.jsonl", "test.jsonl", "metadata.jsonl"):
-            target = role_dir / filename
-            if target.exists():
-                target.unlink()
+    _reset_role_output_files(output_path, selected_roles)
 
     tokenizer_path, tokenizer_config_path = tokenizer.save(manifest_dir, roles=selected_roles)
     source_models = [
@@ -292,19 +328,30 @@ def export_miditok_role_dataset(
     segments: list[MidiTokRoleSegment] = []
     rejected_sources: list[dict[str, Any]] = []
     for source in source_models:
-        midi_path = _ensure_midi_path(source.path, manifest_dir / "converted")
-        source_hash = _hash_file(midi_path)
-        train_eligible = _train_eligible(source)
-        if not train_eligible:
-            rejected_sources.append(
-                {
-                    "source_file_id": source.source_file_id,
-                    "source_path": source.path,
-                    "license": source.license,
-                    "commercial_training": source.commercial_training,
-                    "reason": _license_rejection_reason(source),
-                }
+        try:
+            midi_path = _ensure_midi_path(source.path, manifest_dir / "converted")
+            source_hash = _hash_file(midi_path)
+            rejection = _source_rejection(
+                source,
+                midi_path,
+                roles=selected_roles,
+                min_quality=min_quality,
+                min_notes=min_notes_per_source,
+                min_duration_beats=min_duration_beats,
+                supported_time_signatures=supported_time_signatures,
             )
+        except Exception as exc:
+            rejected_sources.append(
+                _rejected_source(
+                    source,
+                    reason="midi_corrupt_or_unreadable",
+                    details={"error": str(exc)},
+                )
+            )
+            continue
+        if rejection is not None:
+            rejected_sources.append(rejection)
+            continue
 
         role_midis = _split_midi_by_role(
             midi_path,
@@ -312,6 +359,17 @@ def export_miditok_role_dataset(
             source=source,
             roles=selected_roles,
         )
+        if not role_midis:
+            rejected_sources.append(
+                _rejected_source(
+                    source,
+                    reason="no_supported_role_tracks",
+                    details={"supported_roles": list(selected_roles)},
+                )
+            )
+            continue
+
+        source_split = _split_for_source_file_id(source.source_file_id)
         for role, role_midi_path in role_midis.items():
             token_sequences, token_id_sequences = tokenizer.encode_midi(role_midi_path)
             reconstructed_path = (
@@ -327,7 +385,7 @@ def export_miditok_role_dataset(
 
             segment = MidiTokRoleSegment(
                 id=f"miditok_{_stable_hash(f'{source.source_file_id}:{role}')[:16]}",
-                split="train" if train_eligible else "rejected",
+                split=source_split,
                 role=role,  # type: ignore[arg-type]
                 style=source.style,
                 chord_context=source.chord_context,
@@ -337,7 +395,7 @@ def export_miditok_role_dataset(
                 source_dataset=source.source_dataset,
                 license=source.license,
                 commercial_training=source.commercial_training,
-                train_eligible=train_eligible,
+                train_eligible=True,
                 token_sequences=token_sequences,
                 token_id_sequences=token_id_sequences,
                 token_count=sum(len(sequence) for sequence in token_id_sequences),
@@ -359,9 +417,8 @@ def export_miditok_role_dataset(
                 },
             )
             segments.append(segment)
-            if segment.split != "rejected":
-                _append_jsonl(output_path / role / f"{segment.split}.jsonl", segment)
-                _append_jsonl(output_path / role / "metadata.jsonl", _segment_metadata(segment))
+            _append_jsonl(output_path / role / f"{segment.split}.jsonl", segment)
+            _append_jsonl(output_path / role / "metadata.jsonl", _segment_metadata(segment))
 
     tokenized_segments_path = manifest_dir / "segments.jsonl"
     metadata_path = manifest_dir / "metadata.jsonl"
@@ -376,6 +433,25 @@ def export_miditok_role_dataset(
     license_report_path = manifest_dir / "license_report.json"
     license_report_path.write_text(
         json.dumps(_license_report(source_models, segments, rejected_sources), indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    quality_report_path = manifest_dir / "quality_report.json"
+    quality_report_path.write_text(
+        json.dumps(
+            _quality_report(
+                source_models,
+                segments,
+                rejected_sources,
+                min_notes=min_notes_per_source,
+                min_quality=min_quality,
+                min_duration_beats=min_duration_beats,
+                supported_time_signatures=supported_time_signatures,
+                max_acceptable_loss_ratio=max_acceptable_loss_ratio,
+            ),
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -394,7 +470,10 @@ def export_miditok_role_dataset(
         source_count=len(source_models),
         total_segments=len(segments),
         train_segments=sum(1 for segment in segments if segment.split == "train"),
+        val_segments=sum(1 for segment in segments if segment.split == "val"),
+        test_segments=sum(1 for segment in segments if segment.split == "test"),
         rejected_segments=sum(1 for segment in segments if segment.split == "rejected"),
+        rejected_sources=len(rejected_sources),
         role_counts={role: role_counts.get(role, 0) for role in selected_roles},
         split_counts={
             split: split_counts.get(split, 0)
@@ -406,13 +485,23 @@ def export_miditok_role_dataset(
         tokenized_segments_path=str(tokenized_segments_path),
         metadata_path=str(metadata_path),
         license_report_path=str(license_report_path),
+        quality_report_path=str(quality_report_path),
         summary_path=str(summary_path),
         average_information_loss_ratio=round(sum(losses) / len(losses), 6) if losses else 1.0,
         max_information_loss_ratio=round(max(losses), 6) if losses else 1.0,
         acceptable_information_loss=bool(losses)
         and max(losses) <= max_acceptable_loss_ratio,
+        min_quality=min_quality,
+        min_notes_per_source=min_notes_per_source,
+        min_duration_beats=min_duration_beats,
+        supported_time_signatures=list(supported_time_signatures),
     )
     summary_path.write_text(summary.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    if enforce_information_loss_threshold and not summary.acceptable_information_loss:
+        raise ValueError(
+            "MidiTok reconstruction information loss exceeds threshold: "
+            f"max={summary.max_information_loss_ratio}, threshold={max_acceptable_loss_ratio}"
+        )
     return summary
 
 
@@ -422,6 +511,174 @@ def load_miditok_segments(path: str | Path) -> list[MidiTokRoleSegment]:
         for line in Path(path).read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+
+
+def _load_tokenizer_config(config: Mapping[str, Any] | str | Path) -> dict[str, Any]:
+    if isinstance(config, Mapping):
+        return dict(config)
+    path = Path(config)
+    if path.suffix.lower() == ".json":
+        data = json.loads(path.read_text(encoding="utf-8"))
+    else:
+        try:
+            import yaml
+        except ImportError as exc:
+            raise MidiTokUnavailableError(
+                "PyYAML is required to load MidiTok tokenizer YAML configs."
+            ) from exc
+        data = yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"MidiTok tokenizer config must be a mapping: {path}")
+    return data
+
+
+def _parse_beat_res(beat_res: Mapping[str, int]) -> dict[tuple[int, int], int]:
+    parsed: dict[tuple[int, int], int] = {}
+    for key, value in beat_res.items():
+        normalized = str(key).replace("-", "_")
+        parts = normalized.split("_")
+        if len(parts) != 2:
+            raise ValueError(f"Invalid MidiTok beat_res key: {key!r}")
+        parsed[(int(parts[0]), int(parts[1]))] = int(value)
+    return parsed
+
+
+def _reset_role_output_files(output_path: Path, roles: tuple[str, ...]) -> None:
+    for role in roles:
+        role_dir = output_path / role
+        role_dir.mkdir(parents=True, exist_ok=True)
+        for filename in ("train.jsonl", "val.jsonl", "test.jsonl", "metadata.jsonl"):
+            (role_dir / filename).write_text("", encoding="utf-8")
+
+
+def _source_rejection(
+    source: MidiTokSource,
+    midi_path: Path,
+    *,
+    roles: tuple[str, ...],
+    min_quality: int,
+    min_notes: int,
+    min_duration_beats: float,
+    supported_time_signatures: tuple[str, ...],
+) -> dict[str, Any] | None:
+    if not _train_eligible(source):
+        return _rejected_source(source, reason=_license_rejection_reason(source))
+
+    quality = int(source.metadata.get("quality", 3) or 3)
+    if quality < min_quality:
+        return _rejected_source(
+            source,
+            reason="quality_below_threshold",
+            details={"quality": quality, "min_quality": min_quality},
+        )
+
+    stats = _midi_quality_stats(midi_path, source=source, roles=roles)
+    if int(stats["note_count"]) < min_notes:
+        return _rejected_source(
+            source,
+            reason="too_few_notes",
+            details={"note_count": stats["note_count"], "min_notes": min_notes},
+        )
+    if float(stats["duration_beats"]) < min_duration_beats:
+        return _rejected_source(
+            source,
+            reason="too_short",
+            details={
+                "duration_beats": stats["duration_beats"],
+                "min_duration_beats": min_duration_beats,
+            },
+        )
+
+    unsupported_signatures = sorted(
+        set(stats["time_signatures"]) - set(supported_time_signatures)
+    )
+    if unsupported_signatures:
+        return _rejected_source(
+            source,
+            reason="unsupported_time_signature",
+            details={
+                "time_signatures": stats["time_signatures"],
+                "supported_time_signatures": list(supported_time_signatures),
+            },
+        )
+    if not stats["supported_roles"]:
+        return _rejected_source(
+            source,
+            reason="no_supported_role_tracks",
+            details={"detected_roles": stats["detected_roles"], "supported_roles": list(roles)},
+        )
+    return None
+
+
+def _midi_quality_stats(
+    midi_path: Path,
+    *,
+    source: MidiTokSource,
+    roles: tuple[str, ...],
+) -> dict[str, Any]:
+    midi = mido.MidiFile(midi_path)
+    time_signatures = _time_signatures(midi)
+    detected_roles: list[str] = []
+    supported_roles: list[str] = []
+    total_notes = 0
+    max_tick = 0
+    for track_index, track in enumerate(midi.tracks):
+        absolute = 0
+        for message in track:
+            absolute += int(message.time)
+        max_tick = max(max_tick, absolute)
+
+        note_count = _note_count_for_track(track)
+        total_notes += note_count
+        if note_count == 0:
+            continue
+        role = _role_for_track(track, track_index, source)
+        if role:
+            detected_roles.append(role)
+        if role in roles:
+            supported_roles.append(role)
+    return {
+        "note_count": total_notes,
+        "duration_beats": round(max_tick / max(1, midi.ticks_per_beat), 3),
+        "time_signatures": sorted(time_signatures),
+        "detected_roles": sorted(set(detected_roles)),
+        "supported_roles": sorted(set(supported_roles)),
+    }
+
+
+def _time_signatures(midi: mido.MidiFile) -> set[str]:
+    signatures: set[str] = set()
+    for track in midi.tracks:
+        for message in track:
+            if message.is_meta and message.type == "time_signature":
+                signatures.add(f"{message.numerator}/{message.denominator}")
+    return signatures or {"4/4"}
+
+
+def _rejected_source(
+    source: MidiTokSource,
+    *,
+    reason: str,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "source_file_id": source.source_file_id,
+        "source_path": source.path,
+        "license": source.license,
+        "commercial_training": source.commercial_training,
+        "training_allowed": source.training_allowed,
+        "reason": reason,
+        "details": details or {},
+    }
+
+
+def _split_for_source_file_id(source_file_id: str) -> DatasetSplit:
+    bucket = int(_stable_hash(source_file_id)[:8], 16) % 100
+    if bucket < 80:
+        return "train"
+    if bucket < 90:
+        return "val"
+    return "test"
 
 
 def _import_miditok() -> Any:
@@ -665,6 +922,57 @@ def _license_report(
             }
             for segment in segments
         ],
+    }
+
+
+def _quality_report(
+    sources: list[MidiTokSource],
+    segments: list[MidiTokRoleSegment],
+    rejected_sources: list[dict[str, Any]],
+    *,
+    min_notes: int,
+    min_quality: int,
+    min_duration_beats: float,
+    supported_time_signatures: tuple[str, ...],
+    max_acceptable_loss_ratio: float,
+) -> dict[str, Any]:
+    losses = [
+        float(segment.information_loss_ratio)
+        for segment in segments
+        if segment.information_loss_ratio is not None
+    ]
+    return {
+        "schema_version": "0.1.0",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "filters": {
+            "min_quality": min_quality,
+            "min_notes_per_source": min_notes,
+            "min_duration_beats": min_duration_beats,
+            "supported_time_signatures": list(supported_time_signatures),
+            "max_acceptable_loss_ratio": max_acceptable_loss_ratio,
+        },
+        "source_count": len(sources),
+        "tokenized_source_ids": sorted({segment.source_file_id for segment in segments}),
+        "rejected_sources": rejected_sources,
+        "information_loss": {
+            "average_information_loss_ratio": round(sum(losses) / len(losses), 6)
+            if losses
+            else 1.0,
+            "max_information_loss_ratio": round(max(losses), 6) if losses else 1.0,
+            "acceptable": bool(losses) and max(losses) <= max_acceptable_loss_ratio,
+            "segments": [
+                {
+                    "id": segment.id,
+                    "source_file_id": segment.source_file_id,
+                    "role": segment.role,
+                    "split": segment.split,
+                    "note_count_input": segment.note_count_input,
+                    "note_count_reconstructed": segment.note_count_reconstructed,
+                    "information_loss_ratio": segment.information_loss_ratio,
+                }
+                for segment in segments
+            ],
+        },
     }
 
 

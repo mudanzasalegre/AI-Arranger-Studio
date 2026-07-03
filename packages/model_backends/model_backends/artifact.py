@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Any
 from model_backends.base import ArtifactType, ModelArtifact, ModelTask
 
 DEFAULT_ARTIFACT_OUTPUT_DIR = Path("outputs/model_artifacts/raw")
+MAX_ARTIFACT_STEM_LENGTH = 72
 _SAFE_CHARS_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
@@ -20,7 +22,12 @@ def ensure_artifact_dir(output_dir: str | Path | None = None) -> Path:
 def safe_artifact_stem(*parts: object) -> str:
     raw = "_".join(str(part) for part in parts if part is not None and str(part) != "")
     cleaned = _SAFE_CHARS_RE.sub("_", raw).strip("._")
-    return cleaned or "artifact"
+    cleaned = cleaned or "artifact"
+    if len(cleaned) <= MAX_ARTIFACT_STEM_LENGTH:
+        return cleaned
+    digest = hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:10]
+    prefix = cleaned[: MAX_ARTIFACT_STEM_LENGTH - len(digest) - 1].rstrip("._")
+    return f"{prefix}_{digest}"
 
 
 def artifact_path(

@@ -47,6 +47,7 @@ class DummyCustomRoleModelBackend(CustomRoleModelBackend):
         config_file: str = "config.yaml",
         training_manifest_file: str = "training_manifest.yaml",
         license_report_file: str = "license_report.json",
+        metrics_file: str = "metrics.json",
         output_dir: str | Path = "outputs/model_artifacts/raw",
         **_: Any,
     ) -> None:
@@ -62,6 +63,7 @@ class DummyCustomRoleModelBackend(CustomRoleModelBackend):
             config_file=config_file,
             training_manifest_file=training_manifest_file,
             license_report_file=license_report_file,
+            metrics_file=metrics_file,
         )
         self.inspection = inspect_custom_role_model(self.spec)
         self.capabilities = ModelCapabilities(
@@ -91,9 +93,11 @@ class DummyCustomRoleModelBackend(CustomRoleModelBackend):
             "model_path": self.inspection.model_path,
             "training_manifest_path": self.inspection.training_manifest_path,
             "license_report_path": self.inspection.license_report_path,
+            "metrics_path": self.inspection.metrics_path,
             "commercial_allowed": self.inspection.commercial_allowed,
             "dataset_count": self.inspection.dataset_count,
             "rejected_source_count": self.inspection.rejected_source_count,
+            "metrics": self.inspection.metrics,
             "warnings": self.inspection.warnings,
         }
 

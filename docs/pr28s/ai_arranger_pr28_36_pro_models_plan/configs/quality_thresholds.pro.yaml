@@ -1,0 +1,47 @@
+schema_version: 0.1.0
+
+global:
+  max_blocking_errors: 0
+  min_tracks: 3
+  min_note_events: 80
+  require_full_midi: true
+  require_musicxml: true
+  require_model_trace: true
+  reject_pending_takes_on_export: true
+
+bass:
+  min_beat1_root_score: 0.55
+  min_approach_to_next_root_score: 0.35
+  max_large_leaps: 8
+  min_active_bar_ratio: 0.70
+
+piano:
+  max_rootless_violations: 24
+  min_avg_voicing_size: 2.0
+  max_voicing_size: 6
+  max_low_register_notes_below_midi: 40
+
+drums:
+  min_drum_pitch_count: 3
+  min_fill_bar_count: 1
+  min_velocity_stddev: 2.0
+
+melody:
+  min_breath_rest_count: 2
+  max_large_leaps: 10
+  min_active_bar_ratio: 0.35
+
+horns:
+  min_breath_rest_count: 1
+  max_large_leaps: 12
+  max_density_per_bar: 8
+
+ratings:
+  A:
+    min_score: 0.88
+  B:
+    min_score: 0.72
+  C:
+    min_score: 0.55
+  D:
+    min_score: 0.0

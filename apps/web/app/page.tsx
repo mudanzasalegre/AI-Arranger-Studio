@@ -451,6 +451,34 @@ export default function Home() {
     }
   }
 
+  async function generateProfessionalProject() {
+    setBusy(true);
+    setMessage("Generating professional project");
+    try {
+      const generated = await requestJson<GenerateResponse>("/v1/projects/generate-professional", {
+        method: "POST",
+        body: JSON.stringify({
+          prompt,
+          seed,
+          include_pdf: includePdf,
+          export_mode: "private",
+          use_text2midi_sketch: false,
+        }),
+      });
+      setProjectId(generated.project_id);
+      setFiles(generated.files);
+      setValidation(generated.validation);
+      await loadProject(generated.project_id);
+      await loadProjectArtifacts(generated.project_id);
+      setActiveView("project");
+      setMessage("Professional project generated");
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function loadProject(id = selectedProjectId) {
     if (!id) {
       return;
@@ -894,6 +922,7 @@ export default function Home() {
         <HomeView
           busy={busy}
           files={exportedFiles}
+          generateProfessionalProject={generateProfessionalProject}
           generateProject={generateProject}
           project={project}
           setActiveView={setActiveView}
@@ -906,6 +935,7 @@ export default function Home() {
           busy={busy}
           compilePrompt={compilePrompt}
           compiledSpec={compiledSpec}
+          generateProfessionalProject={generateProfessionalProject}
           generateProject={generateProject}
           includePdf={includePdf}
           prompt={prompt}
@@ -1037,6 +1067,7 @@ export default function Home() {
 function HomeView({
   busy,
   files,
+  generateProfessionalProject,
   generateProject,
   project,
   setActiveView,
@@ -1044,6 +1075,7 @@ function HomeView({
 }: {
   busy: boolean;
   files: FileRecord[];
+  generateProfessionalProject: () => Promise<void>;
   generateProject: () => Promise<void>;
   project: ProjectResponse | null;
   setActiveView: (view: ViewId) => void;
@@ -1064,6 +1096,14 @@ function HomeView({
           <button disabled={busy} onClick={() => void generateProject()} type="button">
             Generate
           </button>
+          <button
+            className="secondary-button"
+            disabled={busy}
+            onClick={() => void generateProfessionalProject()}
+            type="button"
+          >
+            Generate Pro
+          </button>
           <button className="secondary-button" onClick={() => setActiveView("score")} type="button">
             Score
           </button>
@@ -1081,6 +1121,7 @@ function NewProjectView({
   busy,
   compilePrompt,
   compiledSpec,
+  generateProfessionalProject,
   generateProject,
   includePdf,
   prompt,
@@ -1092,6 +1133,7 @@ function NewProjectView({
   busy: boolean;
   compilePrompt: () => Promise<void>;
   compiledSpec: GenerationSpec | null;
+  generateProfessionalProject: () => Promise<void>;
   generateProject: () => Promise<void>;
   includePdf: boolean;
   prompt: string;
@@ -1151,6 +1193,14 @@ function NewProjectView({
           </button>
           <button disabled={busy} onClick={generateProject} type="button">
             Generate
+          </button>
+          <button
+            className="secondary-button"
+            disabled={busy}
+            onClick={generateProfessionalProject}
+            type="button"
+          >
+            Generate Pro
           </button>
         </div>
       </div>

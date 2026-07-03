@@ -163,16 +163,77 @@ def test_midigpt_backend_uses_real_session_api(tmp_path, monkeypatch):
     assert calls["context_path"] == str(context_path)
     assert calls["track_prompt"] == {"id": 0, "bars": [8], "ignore": False}
     assert calls["inference_config"] == {
-        "temperature": 0.8,
+        "temperature": 1.0,
         "seed": 77,
         "top_p": 0.95,
-        "model_dim": 9,
+        "model_dim": 4,
         "mask_mode": "attention",
         "polyphony_hard_limit": 4,
     }
     assert calls["run"] is True
-    assert calls["to_midi_path"] == str(tmp_path / "midigpt_infill_bars_fake-engine.full.mid")
+    assert calls["to_midi_path"] == str(
+        tmp_path / "midigpt_infill_bars_fake-engine.attempt1.chunk1.full.mid"
+    )
     assert (tmp_path / "midigpt_infill_bars_fake-engine.mid").read_bytes()[:4] == b"MThd"
+
+
+def test_midigpt_pr30_chunking_density_and_autoregressive_prompts():
+    from model_backends.symbolic import midigpt_backend
+    from model_backends.symbolic.midigpt_backend import MidiGptBackend
+
+    class FakeTrackPrompt:
+        def __init__(
+            self,
+            *,
+            id,
+            bars,
+            autoregressive=False,
+            ignore=False,
+            attributes=None,
+            bar_attributes=None,
+        ):
+            self.id = id
+            self.bars = bars
+            self.autoregressive = autoregressive
+            self.ignore = ignore
+            self.attributes = attributes or {}
+            self.bar_attributes = bar_attributes or {}
+
+    api = types.SimpleNamespace(TrackPrompt=FakeTrackPrompt)
+
+    assert midigpt_backend._bar_indices([1, 3]) == [0, 2]
+    assert midigpt_backend._chunk_bar_indices(list(range(10))) == [
+        list(range(8)),
+        [8, 9],
+    ]
+    assert midigpt_backend._density_to_note_density("medium_high") == 7
+    assert midigpt_backend._model_dim_for_bar_indices(list(range(8)), default=8) == 8
+    assert midigpt_backend._model_dim_for_bar_indices([8, 9], default=8) == 4
+    assert MidiGptBackend()._attempt_schedule(ModelGenerationRequest(task="infill_bars")) == [
+        (1.0, 0.95),
+        (0.85, 0.9),
+        (0.7, 0.85),
+    ]
+
+    prompts = midigpt_backend._track_prompts(
+        api,
+        track_count=3,
+        target_track_index=1,
+        bar_indices=[0, 1],
+        task="generate_track",
+        attributes={"note_density": 7},
+    )
+
+    assert prompts[0].ignore is True
+    assert prompts[1].id == 1
+    assert prompts[1].bars == [0, 1]
+    assert prompts[1].autoregressive is True
+    assert prompts[1].attributes == {"note_density": 7}
+    assert prompts[1].bar_attributes == {
+        0: {"note_density": 7},
+        1: {"note_density": 7},
+    }
+    assert prompts[2].ignore is True
 
 
 def test_enabled_text2midi_missing_dependency_is_unavailable_without_import(
@@ -263,14 +324,21 @@ def test_text2midi_backend_runs_subprocess_wrapper(tmp_path, monkeypatch):
     )
     calls = {}
 
-    def fake_run(cmd, *, cwd, text, capture_output, check):
+    def fake_run(cmd, *, cwd, text, capture_output, check, **kwargs):
         calls["cmd"] = cmd
         calls["cwd"] = cwd
         calls["text"] = text
         calls["capture_output"] = capture_output
         calls["check"] = check
+        calls["kwargs"] = kwargs
         output_path = Path(cmd[cmd.index("--output") + 1])
         _write_context_midi(output_path, ["Alto Sax Lead"])
+        if "--summary" in cmd:
+            summary_path = Path(cmd[cmd.index("--summary") + 1])
+            summary_path.write_text(
+                '{"status":"ok","output":"' + str(output_path).replace("\\", "\\\\") + '"}\n',
+                encoding="utf-8",
+            )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -298,6 +366,8 @@ def test_text2midi_backend_runs_subprocess_wrapper(tmp_path, monkeypatch):
     assert calls["cmd"][0] == sys.executable
     assert calls["cmd"][calls["cmd"].index("--prompt") + 1] == "hard bop sketch"
     assert calls["cmd"][calls["cmd"].index("--seed") + 1] == "88"
+    assert "--summary" in calls["cmd"]
+    assert calls["kwargs"]["timeout"] == 900
     artifact_path = tmp_path / "text2midi_generate_full_sketch_fake-text2midi.mid"
     assert artifact_path.read_bytes()[:4] == b"MThd"
 

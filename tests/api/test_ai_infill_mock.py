@@ -332,7 +332,7 @@ settings:
     }
     ignored_prompts = [prompt for prompt in calls["track_prompts"] if prompt["ignore"]]
     assert len(ignored_prompts) == len(context_track_names) - 2
-    assert calls["inference_config"]["temperature"] == 0.9
+    assert calls["inference_config"]["temperature"] == 1.0
     assert calls["inference_config"]["top_p"] == 0.95
 
 

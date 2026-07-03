@@ -1,0 +1,59 @@
+schema_version: 0.1.0
+benchmarks:
+  - id: hard_bop_minor_blues_sextet
+    prompt: >-
+      hard bop nocturno en Do menor, 132 bpm, blues menor de 12 compases,
+      sexteto con saxo alto, trompeta, trombon, piano, contrabajo y bateria,
+      bajo caminante, piano rootless, bateria swing y shout chorus final
+    seed: 3601
+    required_tracks:
+      - drums
+      - double_bass
+      - piano
+      - alto_sax
+      - trumpet
+      - trombone
+
+  - id: bebop_blues_quintet
+    prompt: >-
+      bebop blues en Fa, 184 bpm, quinteto con saxo alto, trompeta, piano,
+      contrabajo y bateria, lineas agiles, hits de metales y walking bass
+    seed: 3602
+    required_tracks:
+      - drums
+      - double_bass
+      - piano
+      - alto_sax
+      - trumpet
+
+  - id: modal_jazz_quartet
+    prompt: >-
+      jazz modal en Re dorico, 112 bpm, cuarteto con saxo tenor, piano,
+      contrabajo y bateria, vamp amplio, voicings cuartales y espacio
+    seed: 3603
+    required_tracks:
+      - drums
+      - double_bass
+      - piano
+      - tenor_sax
+
+  - id: jazz_ballad_trio
+    prompt: >-
+      balada jazz en Mi bemol mayor, 72 bpm, trio de piano, contrabajo y bateria,
+      armonia rica, voicings abiertos, escobillas y respiracion amplia
+    seed: 3604
+    required_tracks:
+      - drums
+      - double_bass
+      - piano
+
+  - id: bossa_quartet
+    prompt: >-
+      bossa nova jazz en Sol mayor, 126 bpm, cuarteto con flauta, piano,
+      contrabajo y bateria, bajo bossa, comping sincopado y melodia suave
+    seed: 3605
+    required_tracks:
+      - drums
+      - double_bass
+      - piano
+      - flute

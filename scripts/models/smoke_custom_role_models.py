@@ -38,13 +38,13 @@ def main() -> None:
         include_unavailable=True,
     )
     default_models = {model["id"]: model for model in default_registry.list()}
-    custom_unavailable = [
-        model_id
+    custom_models = {
+        model_id: model
         for model_id, model in default_models.items()
-        if model_id.startswith("custom_") and model["status"] == "unavailable"
-    ]
-    if len(custom_unavailable) != 5:
-        raise RuntimeError(f"Expected 5 unavailable custom models, got {custom_unavailable}")
+        if model_id.startswith("custom_")
+    }
+    if len(custom_models) != 5:
+        raise RuntimeError(f"Expected 5 configured custom models, got {sorted(custom_models)}")
 
     allowed_checkpoint = _checkpoint(
         smoke_root / "checkpoints" / "jazz_melody_v001",
@@ -111,7 +111,9 @@ def main() -> None:
 
     report = {
         "status": "ok",
-        "default_unavailable_custom_models": sorted(custom_unavailable),
+        "default_custom_model_statuses": {
+            model_id: model["status"] for model_id, model in sorted(custom_models.items())
+        },
         "available_smoke_models": {
             model_id: {
                 "status": model["status"],
@@ -183,6 +185,10 @@ def _checkpoint(
             indent=2,
         )
         + "\n",
+        encoding="utf-8",
+    )
+    (path / "metrics.json").write_text(
+        json.dumps({"schema_version": "0.1.0", "role": role, "segment_count": 1}) + "\n",
         encoding="utf-8",
     )
     return path

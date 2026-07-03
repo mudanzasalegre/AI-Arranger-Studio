@@ -1,0 +1,27 @@
+profiles:
+  hard_bop_minor_blues_sextet_pro:
+    prompt: "hard bop nocturno en Do menor, 132 bpm, blues menor de 12 compases, sexteto con saxo alto, trompeta, trombón, piano, contrabajo y batería"
+    seed: 1234
+    use_llm_planner: true
+    use_rule_based_base: true
+    use_custom_role_models: true
+    use_midigpt_infill: true
+    use_text2midi_sketch: true
+    midigpt_targets:
+      - track_role: melody
+        bars: [5, 6, 7, 8]
+      - track_role: horn_response
+        bars: [9, 10, 11, 12]
+      - track_role: piano_comping
+        bars: [3, 4, 7, 8]
+    min_rating: B
+
+  jazz_ballad_quartet_pro:
+    prompt: "balada jazz lenta en Fa menor, cuarteto con saxo alto, piano, contrabajo y batería, elegante y respirable"
+    seed: 4321
+    use_llm_planner: true
+    use_rule_based_base: true
+    use_custom_role_models: true
+    use_midigpt_infill: true
+    use_text2midi_sketch: false
+    min_rating: B

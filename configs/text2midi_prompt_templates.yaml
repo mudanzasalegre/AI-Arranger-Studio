@@ -1,0 +1,63 @@
+schema_version: 0.1.0
+default_template: jazz_sketch
+
+rules:
+  require_terms:
+    - MIDI
+  require_fields:
+    - instruments
+    - key
+    - tempo
+  optional_fields:
+    - form
+    - meter
+    - style
+  forbidden_terms:
+    - realistic audio
+    - audio recording
+    - vocal performance
+    - mastered track
+  sketch_only: true
+  final_arrangement_allowed: false
+
+templates:
+  jazz_sketch:
+    description: General jazz sketch for Text2MIDI.
+    template: >-
+      Create a MIDI sketch in {style} style, key {key}, tempo {tempo} BPM,
+      meter {meter}, form {form}, using {instruments}. Keep it concise,
+      symbolic, and suitable for later arrangement review.
+    defaults:
+      style: hard bop
+      key: C minor
+      tempo: 132
+      meter: 4/4
+      form: 12-bar minor blues
+      instruments: alto saxophone, piano, double bass, drums
+
+  rhythm_section_sketch:
+    description: Sketch emphasizing groove and harmonic support.
+    template: >-
+      Create a MIDI sketch in {style} style, key {key}, tempo {tempo} BPM,
+      meter {meter}, form {form}, using piano, double bass, and drums.
+      Focus on groove, comping, and bass motion for downstream arrangement.
+    defaults:
+      style: swing
+      key: F minor
+      tempo: 120
+      meter: 4/4
+      form: AABA 32 bars
+
+  horn_line_sketch:
+    description: Sketch emphasizing melody and horn response ideas.
+    template: >-
+      Create a MIDI sketch in {style} style, key {key}, tempo {tempo} BPM,
+      meter {meter}, form {form}, using alto saxophone, trumpet, trombone,
+      piano, double bass, and drums. Include a clear lead line and simple
+      horn responses.
+    defaults:
+      style: hard bop
+      key: B-flat major
+      tempo: 148
+      meter: 4/4
+      form: 16-bar head

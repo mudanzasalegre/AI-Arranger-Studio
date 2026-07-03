@@ -19,6 +19,7 @@ from model_backends.custom_role import (
     CustomRoleModelInspection,
     CustomRoleModelSpec,
     DummyCustomRoleModelBackend,
+    StatisticalCustomRoleBackend,
     inspect_custom_role_model,
 )
 from model_backends.errors import (
@@ -55,6 +56,7 @@ __all__ = [
     "ModelTask",
     "MusicModelBackend",
     "RegisteredModelBackend",
+    "StatisticalCustomRoleBackend",
     "UnsupportedModelTaskError",
     "__version__",
     "build_model_backend_registry",

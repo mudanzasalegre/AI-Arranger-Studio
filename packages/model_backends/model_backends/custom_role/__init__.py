@@ -6,6 +6,7 @@ from model_backends.custom_role.loader import (
     CustomRoleModelSpec,
     inspect_custom_role_model,
 )
+from model_backends.custom_role.statistical_backend import StatisticalCustomRoleBackend
 
 __all__ = [
     "CUSTOM_ROLE_MODEL_VERSION",
@@ -13,5 +14,6 @@ __all__ = [
     "CustomRoleModelInspection",
     "CustomRoleModelSpec",
     "DummyCustomRoleModelBackend",
+    "StatisticalCustomRoleBackend",
     "inspect_custom_role_model",
 ]

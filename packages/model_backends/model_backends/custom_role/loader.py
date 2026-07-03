@@ -68,6 +68,7 @@ class CustomRoleModelSpec(CustomRoleLoaderModel):
     config_file: str = "config.yaml"
     training_manifest_file: str = "training_manifest.yaml"
     license_report_file: str = "license_report.json"
+    metrics_file: str = "metrics.json"
 
 
 class CustomRoleModelInspection(CustomRoleLoaderModel):
@@ -85,8 +86,10 @@ class CustomRoleModelInspection(CustomRoleLoaderModel):
     config_path: str
     training_manifest_path: str
     license_report_path: str
+    metrics_path: str
     training_manifest: dict[str, Any] = Field(default_factory=dict)
     license_report: dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, Any] = Field(default_factory=dict)
     dataset_count: int = 0
     rejected_source_count: int = 0
 
@@ -112,6 +115,7 @@ def inspect_custom_role_model(
     config_path = checkpoint_dir / model_spec.config_file
     training_manifest_path = checkpoint_dir / model_spec.training_manifest_file
     license_report_path = checkpoint_dir / model_spec.license_report_file
+    metrics_path = checkpoint_dir / model_spec.metrics_file
 
     paths = {
         "model_file": model_path,
@@ -119,6 +123,7 @@ def inspect_custom_role_model(
         "config_file": config_path,
         "training_manifest_file": training_manifest_path,
         "license_report_file": license_report_path,
+        "metrics_file": metrics_path,
     }
     missing = [f"{name}:{path}" for name, path in paths.items() if not path.exists()]
 
@@ -132,6 +137,7 @@ def inspect_custom_role_model(
         _read_mapping(training_manifest_path) if training_manifest_path.exists() else {}
     )
     license_report = _read_mapping(license_report_path) if license_report_path.exists() else {}
+    metrics = _read_mapping(metrics_path) if metrics_path.exists() else {}
 
     for source_name, payload in (
         ("config", config),
@@ -169,8 +175,10 @@ def inspect_custom_role_model(
         config_path=str(config_path),
         training_manifest_path=str(training_manifest_path),
         license_report_path=str(license_report_path),
+        metrics_path=str(metrics_path),
         training_manifest=training_manifest,
         license_report=license_report,
+        metrics=metrics,
         dataset_count=int(license_review["dataset_count"]),
         rejected_source_count=int(license_review["rejected_source_count"]),
     )

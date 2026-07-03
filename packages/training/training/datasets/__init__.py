@@ -1,3 +1,4 @@
+from training.datasets.from_dataset_manifest import miditok_sources_from_dataset_manifest
 from training.datasets.tokenized_dataset import (
     TOKENIZATION_ROLES,
     TokenizedDatasetSummary,
@@ -14,4 +15,5 @@ __all__ = [
     "TokenizedSegmentMetadata",
     "export_tokenized_dataset",
     "load_tokenized_segments",
+    "miditok_sources_from_dataset_manifest",
 ]

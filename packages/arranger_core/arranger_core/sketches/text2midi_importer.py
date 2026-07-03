@@ -10,7 +10,7 @@ from typing import Any, Literal
 import mido
 from pydantic import BaseModel, ConfigDict, Field
 
-from arranger_core.music_theory import midi_to_note
+from arranger_core.music_theory import midi_to_note, note_to_midi
 from arranger_core.prompt_compiler import compile_prompt
 from arranger_core.schema import (
     ArrangementProject,
@@ -29,7 +29,7 @@ from arranger_core.takes.models import ModelArtifactRecord
 from arranger_core.validators import validate_project
 
 TICKS_PER_BEAT_FALLBACK = 480
-SketchStatus = Literal["sketch_validated", "sketch_uncertain", "sketch_rejected"]
+SketchStatus = Literal["sketch_ready", "sketch_uncertain", "sketch_rejected"]
 DRUM_ALLOWED_MIDI = (36, 38, 42, 44, 45, 47, 49, 50, 51)
 
 
@@ -209,7 +209,7 @@ class Text2MidiSketchImporter:
             if validation_report["status"] == "fail"
             else "sketch_uncertain"
             if uncertainty_reasons
-            else "sketch_validated"
+            else "sketch_ready"
         )
         limitations = [
             "sketch_not_final_arrangement",
@@ -424,11 +424,7 @@ def _track_bars(
         if start >= beats_per_bar:
             continue
         duration = min(duration, beats_per_bar - start)
-        pitch_midi = (
-            _nearest_drum_pitch(note.note)
-            if classification.role == "drums" or classification.instrument == "drum_kit"
-            else note.note
-        )
+        pitch_midi = _normalized_pitch(note.note, classification=classification)
         annotations: dict[str, Any] = {
             "source": "text2midi_sketch",
             "source_track_name": track.name,
@@ -439,7 +435,10 @@ def _track_bars(
         }
         if pitch_midi != note.note:
             annotations["source_midi_note"] = note.note
-            annotations["normalized_drum_pitch"] = True
+            if classification.role == "drums" or classification.instrument == "drum_kit":
+                annotations["normalized_drum_pitch"] = True
+            else:
+                annotations["normalized_out_of_range"] = True
         notes_by_bar[bar_number].append(
             NoteEvent(
                 pitch=midi_to_note(pitch_midi, prefer_sharps=False),
@@ -560,6 +559,8 @@ def _uncertainty_reasons(
         reasons.append("too_dense")
     if validation_report["status"] == "pass_with_warnings":
         reasons.append("validation_warnings")
+    if _has_normalized_out_of_range_notes(tracks):
+        reasons.append("normalized_out_of_range_notes")
     return sorted(set(reasons))
 
 
@@ -573,3 +574,49 @@ def _deduped_track_id(base: str, used: set[str]) -> str:
         suffix += 1
     used.add(candidate)
     return candidate
+
+
+def _normalized_pitch(
+    midi_note: int,
+    *,
+    classification: SketchTrackClassification,
+) -> int:
+    if classification.role == "drums" or classification.instrument == "drum_kit":
+        return _nearest_drum_pitch(midi_note)
+    note_range = _INSTRUMENT_ABSOLUTE_RANGES.get(classification.instrument)
+    if note_range is None:
+        return midi_note
+    low, high = note_range
+    if low <= midi_note <= high:
+        return midi_note
+    candidates = [
+        midi_note + (12 * octave_shift)
+        for octave_shift in range(-6, 7)
+        if low <= midi_note + (12 * octave_shift) <= high
+    ]
+    if candidates:
+        return min(candidates, key=lambda candidate: (abs(candidate - midi_note), candidate))
+    return max(low, min(high, midi_note))
+
+
+def _has_normalized_out_of_range_notes(tracks: list[Track]) -> bool:
+    return any(
+        getattr(event, "annotations", {}).get("normalized_out_of_range")
+        for track in tracks
+        for bar in track.bars
+        for event in bar.events
+    )
+
+
+_INSTRUMENT_ABSOLUTE_RANGES = {
+    "piano": (note_to_midi("A0"), note_to_midi("C8")),
+    "double_bass": (note_to_midi("E1"), note_to_midi("G4")),
+    "alto_sax": (note_to_midi("Db3"), note_to_midi("Ab5")),
+    "tenor_sax": (note_to_midi("Ab2"), note_to_midi("E5")),
+    "baritone_sax": (note_to_midi("C2"), note_to_midi("Ab4")),
+    "trumpet_bflat": (note_to_midi("F#3"), note_to_midi("D6")),
+    "trombone": (note_to_midi("E2"), note_to_midi("Bb4")),
+    "clarinet_bflat": (note_to_midi("D3"), note_to_midi("Bb6")),
+    "flute": (note_to_midi("C4"), note_to_midi("D7")),
+    "tuba": (note_to_midi("D1"), note_to_midi("F4")),
+}

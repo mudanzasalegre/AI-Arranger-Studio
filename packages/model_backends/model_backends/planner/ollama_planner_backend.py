@@ -123,9 +123,19 @@ class OllamaPlannerBackend:
         try:
             data = self._post_json("/chat", payload)
         except Exception as exc:
-            raise ModelBackendUnavailableError(
-                f"Ollama planner request failed: {exc}. Install hint: {self.install_hint}"
-            ) from exc
+            if self.use_json_schema:
+                fallback_payload = {**payload, "format": "json"}
+                try:
+                    data = self._post_json("/chat", fallback_payload)
+                except Exception as fallback_exc:
+                    raise ModelBackendUnavailableError(
+                        f"Ollama planner request failed: {fallback_exc}. "
+                        f"Install hint: {self.install_hint}"
+                    ) from fallback_exc
+            else:
+                raise ModelBackendUnavailableError(
+                    f"Ollama planner request failed: {exc}. Install hint: {self.install_hint}"
+                ) from exc
 
         content = _response_content(data)
         if not content:

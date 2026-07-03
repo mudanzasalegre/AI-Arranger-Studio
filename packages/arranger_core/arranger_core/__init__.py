@@ -122,14 +122,21 @@ from arranger_core.planning import (
     PlanAttempt,
     PlanValidator,
     RoleIntent,
+    build_planner_provider_from_registry,
 )
 from arranger_core.presets import EvaluationPrompt, GenerationPreset, PresetLibrary
+from arranger_core.professional import (
+    ProfessionalGenerationOptions,
+    ProfessionalGenerationOrchestrator,
+    ProfessionalGenerationResult,
+)
 from arranger_core.prompt_compiler import (
     CompileDefaults,
     PromptCompiler,
     compile_prompt,
     normalize_prompt,
 )
+from arranger_core.quality import PRO_QUALITY_GATE_VERSION, ProQualityGate
 from arranger_core.release_gate import (
     RELEASE_GATE_VERSION,
     ReleaseExportMode,
@@ -330,6 +337,11 @@ __all__ = [
     "PatternAdapter",
     "PatternRetriever",
     "PresetLibrary",
+    "ProfessionalGenerationOptions",
+    "ProfessionalGenerationOrchestrator",
+    "ProfessionalGenerationResult",
+    "PRO_QUALITY_GATE_VERSION",
+    "ProQualityGate",
     "ProgressionLibrary",
     "ProgressionTemplate",
     "RetrievalCandidate",
@@ -339,6 +351,7 @@ __all__ = [
     "ShoutChorusGenerator",
     "StyleProfile",
     "StyleProfileCatalog",
+    "build_planner_provider_from_registry",
     "compile_prompt",
     "degree_to_chord_symbol",
     "export_project",

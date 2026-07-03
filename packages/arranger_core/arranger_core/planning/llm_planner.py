@@ -95,7 +95,9 @@ class LlmPlanner:
                         )
                     )
                     continue
-                patch, parse_report = self.validator.parse_patch_json(raw_json)
+                patch, parse_report = self.validator.parse_patch_json(
+                    _normalize_planner_json(raw_json, project=project)
+                )
                 if patch is not None:
                     validation = self.validator.validate_patch(
                         patch,
@@ -583,3 +585,122 @@ def _plan_version() -> str:
 def _slug(value: str) -> str:
     slug = "".join(char.lower() if char.isalnum() else "_" for char in value)
     return "_".join(part for part in slug.split("_") if part) or "section"
+
+
+def _normalize_planner_json(raw_json: str, *, project: ArrangementProject) -> str:
+    try:
+        payload = json.loads(raw_json)
+    except json.JSONDecodeError:
+        return raw_json
+    if not isinstance(payload, dict):
+        return raw_json
+
+    changed = False
+    changed = _normalize_ensemble_alias(payload) or changed
+    sections = payload.get("sections")
+    if isinstance(sections, list):
+        changed = _normalize_sections(sections, bar_count=project.bar_count) or changed
+
+    changed = _normalize_role_intents(payload.get("role_intents")) or changed
+    generation_strategy = payload.get("generation_strategy")
+    if isinstance(generation_strategy, dict):
+        changed = _normalize_role_intents(generation_strategy.get("role_intents")) or changed
+
+    if not changed:
+        return raw_json
+    return json.dumps(payload, sort_keys=True)
+
+
+def _normalize_ensemble_alias(payload: dict[str, Any]) -> bool:
+    if payload.get("ensemble") != "jazz_quartet":
+        return False
+    instruments = payload.get("instruments")
+    if isinstance(instruments, list) and "tenor_sax" in instruments:
+        payload["ensemble"] = "jazz_quartet_tenor"
+    else:
+        payload["ensemble"] = "jazz_quartet_alto"
+    return True
+
+
+def _normalize_sections(sections: list[Any], *, bar_count: int) -> bool:
+    changed = False
+    previous_section: dict[str, Any] | None = None
+    previous_end = 0
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+
+        energy, energy_changed = _coerce_probability(section.get("energy"))
+        if energy_changed:
+            section["energy"] = energy
+            changed = True
+
+        density_by_role = section.get("density_by_role")
+        if isinstance(density_by_role, dict):
+            for role, density in list(density_by_role.items()):
+                normalized_density, density_changed = _coerce_probability(density)
+                if density_changed:
+                    density_by_role[role] = normalized_density
+                    changed = True
+
+        start_bar = section.get("start_bar")
+        end_bar = section.get("end_bar")
+        if not isinstance(start_bar, int) or not isinstance(end_bar, int):
+            continue
+        if isinstance(start_bar, bool) or isinstance(end_bar, bool):
+            continue
+
+        if bar_count > 0 and end_bar > bar_count:
+            end_bar = bar_count
+            section["end_bar"] = end_bar
+            changed = True
+        if end_bar < start_bar:
+            end_bar = start_bar
+            section["end_bar"] = end_bar
+            changed = True
+        if previous_section is not None and start_bar <= previous_end:
+            previous_start = previous_section.get("start_bar")
+            if (
+                start_bar == previous_end
+                and isinstance(previous_start, int)
+                and not isinstance(previous_start, bool)
+                and previous_end > previous_start
+            ):
+                previous_section["end_bar"] = previous_end - 1
+                changed = True
+            else:
+                start_bar = previous_end + 1
+                if bar_count > 0:
+                    start_bar = min(start_bar, bar_count)
+                section["start_bar"] = start_bar
+                changed = True
+                if end_bar < start_bar:
+                    end_bar = start_bar
+                    section["end_bar"] = end_bar
+                    changed = True
+
+        previous_section = section
+        previous_end = end_bar
+    return changed
+
+
+def _normalize_role_intents(role_intents: Any) -> bool:
+    if not isinstance(role_intents, list):
+        return False
+    changed = False
+    for intent in role_intents:
+        if not isinstance(intent, dict):
+            continue
+        density, density_changed = _coerce_probability(intent.get("density"))
+        if density_changed:
+            intent["density"] = density
+            changed = True
+    return changed
+
+
+def _coerce_probability(value: Any) -> tuple[Any, bool]:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return value, False
+    if 1.0 < float(value) <= 100.0:
+        return round(float(value) / 100.0, 4), True
+    return value, False

@@ -1,7 +1,7 @@
 [project]
 name = "ai-arranger-model-worker"
 version = "0.1.0"
-dependencies = ["fastapi", "uvicorn", "pydantic", "pyyaml", "httpx"]
+dependencies = ["fastapi", "uvicorn", "pydantic", "pyyaml", "httpx", "model-backends"]
 
 [build-system]
 requires = ["setuptools>=68"]

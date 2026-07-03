@@ -6,14 +6,12 @@ import re
 from pathlib import Path
 from typing import Any, Literal
 
-from arranger_core import ArrangementProject, LlmPlanner
-from fastapi import APIRouter, HTTPException
-from model_backends import (
-    ModelBackendConfigurationError,
-    ModelBackendUnavailableError,
-    build_model_backend_registry,
-    load_ai_models_config,
+from arranger_core import (
+    ArrangementProject,
+    LlmPlanner,
+    build_planner_provider_from_registry,
 )
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 API_STORAGE_ENV = "AI_ARRANGER_API_STORAGE"
@@ -43,7 +41,8 @@ def plan_project_with_ai(project_id: str, payload: AiPlanRequest) -> dict[str, A
 
     project = ArrangementProject.load_json(project_path)
     track_snapshot = [track.model_dump(mode="json") for track in project.tracks]
-    result = LlmPlanner(provider=_configured_planner_provider()).plan(
+    provider = build_planner_provider_from_registry()
+    result = LlmPlanner(provider=provider).plan(
         prompt=payload.prompt,
         project=project,
         mode=payload.mode,
@@ -146,38 +145,3 @@ def _write_json(path: Path, data: dict[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return path
-
-
-def _configured_planner_provider():
-    try:
-        config = load_ai_models_config()
-    except ModelBackendConfigurationError as exc:
-        return _UnavailablePlannerProvider(str(exc))
-
-    backend_config = config.backends.get("local_llm_planner")
-    if backend_config is None or not backend_config.enabled:
-        return None
-
-    try:
-        registry = build_model_backend_registry(
-            config=config,
-            include_disabled=False,
-            include_unavailable=True,
-        )
-        return registry.get("local_llm_planner")
-    except (ModelBackendConfigurationError, ModelBackendUnavailableError, KeyError) as exc:
-        return _UnavailablePlannerProvider(str(exc))
-
-
-class _UnavailablePlannerProvider:
-    def __init__(self, reason: str) -> None:
-        self.reason = reason
-
-    def generate_plan_json(
-        self,
-        *,
-        prompt: str,
-        system_prompt: str,
-        previous_error: str | None = None,
-    ) -> str:
-        raise ModelBackendUnavailableError(self.reason)

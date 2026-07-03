@@ -75,15 +75,26 @@ def main() -> None:
                 str(args.max_len),
                 "--temperature",
                 str(args.temperature),
-                "--device",
-                args.device,
-            ]
+        "--device",
+        args.device,
+        "--summary",
+        str(output.with_name(f"{output.stem}.summary.json")),
+    ]
             completed = subprocess.run(
                 cmd, cwd=str(ROOT), text=True, capture_output=True, check=False
             )
             report["returncode"] = completed.returncode
             report["stdout"] = completed.stdout[-4000:]
             report["stderr"] = completed.stderr[-4000:]
+            summary_path = output.with_name(f"{output.stem}.summary.json")
+            report["wrapper_summary_path"] = str(summary_path)
+            if summary_path.exists():
+                try:
+                    report["wrapper_summary"] = json.loads(
+                        summary_path.read_text(encoding="utf-8")
+                    )
+                except json.JSONDecodeError:
+                    report["wrapper_summary"] = {"status": "fail", "error": "invalid_json"}
             report["status"] = (
                 "ok"
                 if completed.returncode == 0 and output.exists() and output.stat().st_size > 0

@@ -20,6 +20,7 @@ retrieval, local symbolic model adapters, and a FastAPI/Next.js application shel
   states.
 - Provides local AI integrations for MIDI-GPT, Text2MIDI sketches, Ollama planning,
   MidiTok training workflows, and custom role-model bootstrap checkpoints.
+- Provides a professional local-model flow through the API, web app, and CLI.
 - Ships reproducible professional benchmark cases for jazz generation quality.
 
 ## Current Scope
@@ -27,19 +28,30 @@ retrieval, local symbolic model adapters, and a FastAPI/Next.js application shel
 The system is intentionally symbolic-first:
 
 ```text
-Prompt
-  -> GenerationSpec
-  -> ArrangementProject
-  -> rule-based / retrieval arrangement
-  -> optional local symbolic model infill
-  -> artifact import and validation
-  -> pending take
-  -> accept or reject
-  -> DAW-ready export package
+Fast flow:
+  Prompt
+    -> GenerationSpec
+    -> ArrangementProject
+    -> rule-based / retrieval arrangement
+    -> validation
+    -> export package
+
+Professional local-model flow:
+  Prompt
+    -> rule-based base arrangement
+    -> Ollama LLM planner
+    -> custom role models
+    -> MIDI-GPT selective infill
+    -> optional Text2MIDI sketch reference
+    -> artifact import and validation
+    -> accepted takes
+    -> professional quality gate
+    -> DAW-ready export package
 ```
 
 Models do not write directly into final exports. Every model result is imported,
-validated, traced, and accepted through the take system.
+validated, traced, and accepted through the take system. Text2MIDI is treated as a
+sketch reference only; it is not merged into the final professional arrangement.
 
 ## Repository Layout
 
@@ -93,15 +105,20 @@ python -m pytest -q
 npm --prefix apps/web run lint
 ```
 
-Start the API and web app in separate terminals:
+Start the API and web app in separate terminals. For the professional local-model
+profile, set the config variables before starting the API:
 
 ```powershell
+$env:AI_MODELS_CONFIG = "./configs/ai_models.pro.yaml"
+$env:LOCAL_MODEL_RUNTIME_CONFIG = "./configs/local_model_runtime.pro.yaml"
 python -m uvicorn app.main:app --app-dir apps/api --reload --port 8000
+
 npm --prefix apps/web run dev
 ```
 
 The API runs at `http://127.0.0.1:8000`. The web app runs at
-`http://127.0.0.1:3000`.
+`http://127.0.0.1:3000`. In the web app, `Generate` runs the fast deterministic
+flow and `Generate Pro` runs the full professional local-model flow.
 
 If GNU Make is available, equivalent targets exist:
 
@@ -115,6 +132,10 @@ make web
 ```
 
 ## Generate a Project
+
+Fast generation is intended for quick iteration and UI editing. Professional
+generation is intended for model-backed output with traceability, accepted takes,
+and quality gates.
 
 Compile a prompt:
 
@@ -145,12 +166,39 @@ Download a ZIP package:
 Invoke-WebRequest -Uri http://127.0.0.1:8000/v1/projects/demo_hard_bop/zip -OutFile outputs/demo_hard_bop.zip
 ```
 
+Generate the full professional local-model flow through the API:
+
+```powershell
+$body = @{
+  project_id = "chet_baker_f_minor_133_pro"
+  prompt = "cool jazz lirico con trompeta solista inspirada en fraseo cantabile tipo Chet Baker, Fa menor, 133 bpm, cuarteto con trompeta, piano, contrabajo y bateria, melodia respirable, swing ligero, armonia elegante"
+  seed = 4243
+  profile = "pro"
+  include_pdf = $false
+  export_mode = "private"
+  use_text2midi_sketch = $false
+} | ConvertTo-Json -Depth 8
+
+Invoke-RestMethod -Uri http://127.0.0.1:8000/v1/projects/generate-professional -Method Post -ContentType application/json -Body $body
+```
+
+Generate the same flow from the CLI:
+
+```powershell
+python scripts/models_pro/generate_professional_midi.py --prompt "cool jazz lirico con trompeta solista inspirada en fraseo cantabile tipo Chet Baker, Fa menor, 133 bpm, cuarteto con trompeta, piano, contrabajo y bateria, melodia respirable, swing ligero, armonia elegante" --profile pro --seed 4243 --run-id chet_baker_f_minor_133_pro
+```
+
+The CLI writes to `outputs/pro_benchmarks/<run_id>/`. The API writes professional
+projects to `outputs/api/projects/<project_id>/` unless `AI_ARRANGER_API_STORAGE`
+points somewhere else.
+
 ## Main API Surface
 
 - `GET /health`
 - `GET /v1/ai/models`
 - `POST /v1/prompts/compile`
 - `POST /v1/projects/generate`
+- `POST /v1/projects/generate-professional`
 - `GET /v1/projects/{project_id}`
 - `POST /v1/projects/{project_id}/export`
 - `GET /v1/projects/{project_id}/zip`
@@ -220,9 +268,38 @@ make custom-role-models-smoke
 make ai-local-smoke
 ```
 
+Verify the installed professional model profile:
+
+```powershell
+python scripts/models_pro/verify_all_models.py --allow-text2midi-check-only --timeout 180
+```
+
+This checks MIDI-GPT, Text2MIDI availability, Ollama planner access, MidiTok, and
+custom role-model checkpoints. Text2MIDI may be verified as a check-only backend
+because the professional flow does not require it in the final export.
+
+## Professional Generation
+
+The professional orchestrator currently uses this sequence:
+
+```text
+1. Compile the prompt into a seed-controlled base project.
+2. Ask the local Ollama planner for a JSON SongPlan patch.
+3. Normalize and validate the LLM plan against local catalogs.
+4. Generate role-specific takes with custom jazz role models.
+5. Generate selective melody, horn, and piano infill with MIDI-GPT.
+6. Import every artifact into the project model.
+7. Validate candidate takes and accept only passing candidates.
+8. Export MIDI, per-track MIDI, MusicXML, manifests, reports, and traces.
+9. Run the professional quality gate.
+```
+
+Commercial exports require license review when any accepted artifact has
+`commercial_use=review_required`; MIDI-GPT currently reports that status.
+
 ## Professional Benchmark
 
-PR-27 adds a reproducible benchmark suite for local professional-generation QA:
+The benchmark suite is for local professional-generation QA:
 
 ```powershell
 python scripts/models/professional_generation_benchmark.py --config configs/professional_benchmarks.yaml --api http://127.0.0.1:8000

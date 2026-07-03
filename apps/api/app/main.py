@@ -24,6 +24,10 @@ from arranger_core import (
 from arranger_core import (
     compile_prompt as compile_generation_spec,
 )
+from arranger_core.professional import (
+    ProfessionalGenerationOptions,
+    ProfessionalGenerationOrchestrator,
+)
 from dataset_tools import PatternIndex, create_manifest, import_dataset
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -93,6 +97,18 @@ class ProjectGenerateRequest(ApiModel):
     spec: dict[str, Any] | None = None
     project_id: str | None = None
     options: GenerateOptions = Field(default_factory=GenerateOptions)
+
+
+class ProfessionalProjectGenerateRequest(ApiModel):
+    prompt: str = Field(default="")
+    seed: int | None = None
+    project_id: str | None = None
+    profile: str = "pro"
+    include_pdf: bool = False
+    export_mode: Literal["private", "commercial"] = "private"
+    min_rating: Literal["A", "B", "C", "D"] = "B"
+    use_text2midi_sketch: bool = False
+    max_ai_attempts: int = Field(default=3, ge=1, le=3)
 
 
 class ProjectExportRequest(ApiModel):
@@ -184,6 +200,51 @@ def generate_project(payload: ProjectGenerateRequest) -> dict[str, Any]:
         "project": _project_metadata(project),
         "files": export_manifest.get("files", []),
         "validation": validation_report,
+    }
+
+
+@app.post("/v1/projects/generate-professional")
+def generate_professional_project(payload: ProfessionalProjectGenerateRequest) -> dict[str, Any]:
+    if not payload.prompt.strip():
+        raise HTTPException(status_code=422, detail="A prompt is required")
+    project_id = _safe_id(payload.project_id, prefix="pro-project")
+    options = ProfessionalGenerationOptions(
+        prompt=payload.prompt,
+        profile=payload.profile,
+        seed=payload.seed if payload.seed is not None else 1234,
+        run_id=project_id,
+        output_root=str(_storage_root() / "projects"),
+        ai_config_path=os.environ.get("AI_MODELS_CONFIG", "configs/ai_models.pro.yaml"),
+        quality_thresholds_path="configs/quality_thresholds.pro.yaml",
+        export_mode=payload.export_mode,
+        include_pdf=payload.include_pdf,
+        min_rating=payload.min_rating,
+        use_text2midi_sketch=payload.use_text2midi_sketch,
+        max_ai_attempts=payload.max_ai_attempts,
+        clean=True,
+    )
+    result = ProfessionalGenerationOrchestrator(repo_root=Path.cwd()).generate(options)
+    if result.status != "ok":
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": result.status,
+                "steps": result.steps,
+                "fallbacks": result.fallbacks,
+            },
+        )
+    project = _load_project(project_id)
+    return {
+        "project_id": project_id,
+        "status": "generated_professional",
+        "project": _project_metadata(project),
+        "files": result.export_manifest.get("files", []),
+        "validation": result.validation,
+        "quality": result.quality,
+        "model_trace": result.model_trace,
+        "takes_manifest": result.takes_manifest,
+        "steps": result.steps,
+        "fallbacks": result.fallbacks,
     }
 
 

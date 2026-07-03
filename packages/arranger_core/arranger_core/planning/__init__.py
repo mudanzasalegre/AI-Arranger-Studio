@@ -8,6 +8,7 @@ from arranger_core.planning.plan_schema import (
     RoleIntent,
 )
 from arranger_core.planning.plan_validator import PlanValidator
+from arranger_core.planning.provider_factory import build_planner_provider_from_registry
 
 __all__ = [
     "GenerationStrategy",
@@ -19,4 +20,5 @@ __all__ = [
     "PlanValidator",
     "PlannerJsonProvider",
     "RoleIntent",
+    "build_planner_provider_from_registry",
 ]

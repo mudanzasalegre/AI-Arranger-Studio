@@ -177,9 +177,15 @@ settings:
         lambda name, *args, **kwargs: object() if name in required else None,
     )
 
-    def fake_run(cmd, *, cwd, text, capture_output, check):
+    def fake_run(cmd, *, cwd, text, capture_output, check, **kwargs):
         output_path = Path(cmd[cmd.index("--output") + 1])
         _write_valid_text2midi_sketch(output_path)
+        if "--summary" in cmd:
+            summary_path = Path(cmd[cmd.index("--summary") + 1])
+            summary_path.write_text(
+                json.dumps({"status": "ok", "output": str(output_path)}) + "\n",
+                encoding="utf-8",
+            )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -197,7 +203,7 @@ settings:
     assert response.status_code == 200, response.json()
     payload = response.json()
     assert payload["backend"] == "text2midi"
-    assert payload["status"] in {"sketch_validated", "sketch_uncertain"}
+    assert payload["status"] in {"sketch_ready", "sketch_uncertain"}
     assert payload["artifact"]["status"] == "validated"
     sketch_id = payload["sketch_id"]
     assert not (tmp_path / "api-storage" / "projects" / sketch_id).exists()

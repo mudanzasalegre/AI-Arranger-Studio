@@ -46,6 +46,52 @@ def test_llm_planner_retries_invalid_json_once_then_accepts_repair():
     assert provider.previous_errors[1] is not None
 
 
+def test_llm_planner_normalizes_common_llm_probability_and_boundary_drift():
+    project = generate_arrangement(
+        GenerationSpec(ensemble="jazz_sextet", form="minor_blues_12", seed=406),
+        project_id="planner-normalized",
+    )
+
+    result = LlmPlanner(provider=_SequenceProvider([_percent_scaled_patch_json()])).plan(
+        prompt="hard bop nocturno en Do menor, 132 bpm, blues menor, sexteto",
+        project=project,
+    )
+
+    assert result.status == "ok"
+    assert result.planner == "llm"
+    assert result.validation["status"] == "pass"
+    assert result.song_plan_patch.sections[0].energy == 0.75
+    assert result.song_plan_patch.sections[0].density_by_role["drum_kit"] == 0.8
+    assert result.song_plan_patch.role_intents[0].density == 0.9
+    assert [
+        (section.start_bar, section.end_bar)
+        for section in result.song_plan_patch.sections
+    ] == [(1, 8), (9, 11), (12, 12)]
+
+
+def test_llm_planner_normalizes_generic_jazz_quartet_alias():
+    project = generate_arrangement(
+        GenerationSpec(
+            ensemble="jazz_quartet_alto",
+            form="minor_blues_12",
+            instruments=["drum_kit", "double_bass", "piano", "trumpet_bflat"],
+            seed=407,
+        ),
+        project_id="planner-generic-quartet",
+    )
+
+    result = LlmPlanner(provider=_SequenceProvider([_generic_quartet_patch_json()])).plan(
+        prompt="cool jazz con trompeta solista, Fa menor, 133 bpm, cuarteto",
+        project=project,
+    )
+
+    assert result.status == "ok"
+    assert result.planner == "llm"
+    assert result.validation["status"] == "pass"
+    assert result.song_plan_patch.ensemble == "jazz_quartet_alto"
+    assert "trumpet_bflat" in result.song_plan_patch.instruments
+
+
 def test_llm_planner_falls_back_after_two_invalid_llm_outputs():
     project = generate_arrangement(
         GenerationSpec(ensemble="jazz_sextet", form="minor_blues_12", seed=403),
@@ -202,3 +248,76 @@ def _valid_patch_json() -> str:
             },
         }
     )
+
+
+def _percent_scaled_patch_json() -> str:
+    return json.dumps(
+        {
+            "style": "hard_bop",
+            "tempo": 132,
+            "meter": "4/4",
+            "key": "C minor",
+            "form": "minor_blues_12",
+            "ensemble": "jazz_sextet",
+            "instruments": [
+                "drum_kit",
+                "double_bass",
+                "piano",
+                "alto_sax",
+                "trumpet_bflat",
+                "trombone",
+            ],
+            "sections": [
+                {
+                    "name": "Head",
+                    "start_bar": 1,
+                    "end_bar": 8,
+                    "energy": 75,
+                    "density_by_role": {"drum_kit": 80, "piano": 70},
+                    "groove_feel": "syncopated",
+                    "role_focus": ["melody", "comping"],
+                },
+                {
+                    "name": "Call-and-Response",
+                    "start_bar": 9,
+                    "end_bar": 12,
+                    "energy": 85,
+                    "density_by_role": {"drum_kit": 90, "piano": 80},
+                    "groove_feel": "drive",
+                    "role_focus": ["melody", "comping", "drums"],
+                },
+                {
+                    "name": "Turnaround",
+                    "start_bar": 12,
+                    "end_bar": 12,
+                    "energy": 95,
+                    "density_by_role": {"drum_kit": 100, "piano": 95},
+                    "groove_feel": "syncopated",
+                    "role_focus": ["melody", "comping", "drums"],
+                },
+            ],
+            "generation_strategy": {
+                "mode": "hybrid_symbolic",
+                "priority_roles": ["drums", "melody", "comping"],
+                "forbid_audio_models": True,
+                "allow_note_generation": False,
+                "allow_midi_export": False,
+            },
+            "role_intents": [
+                {
+                    "role": "drums",
+                    "density": 90,
+                    "strategy": "syncopated_drive",
+                    "allowed_operations": ["patch_plan"],
+                }
+            ],
+        }
+    )
+
+
+def _generic_quartet_patch_json() -> str:
+    patch = json.loads(_valid_patch_json())
+    patch["ensemble"] = "jazz_quartet"
+    patch["instruments"] = ["drum_kit", "double_bass", "piano", "trumpet_bflat"]
+    patch["generation_strategy"]["role_intents"][0]["instruments"] = ["trumpet_bflat"]
+    return json.dumps(patch)

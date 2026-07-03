@@ -75,22 +75,24 @@ def main() -> None:
     metadata = _read_jsonl(summary.metadata_path)
     license_report = json.loads(Path(summary.license_report_path).read_text(encoding="utf-8"))
 
-    train_segments = [segment for segment in segments if segment.split == "train"]
-    rejected_segments = [segment for segment in segments if segment.split == "rejected"]
-    if {segment.role for segment in train_segments} != set(MIDITOK_TRAINING_ROLES):
-        raise RuntimeError("MidiTok smoke did not produce one train segment per PR-24 role")
-    if not rejected_segments or any(segment.split == "train" for segment in rejected_segments):
-        raise RuntimeError("Blocked-license segments entered the train split")
+    if {segment.role for segment in segments} != set(MIDITOK_TRAINING_ROLES):
+        raise RuntimeError("MidiTok smoke did not produce one segment per training role")
+    if any(segment.source_file_id == "synthetic_pr24_blocked" for segment in segments):
+        raise RuntimeError("Blocked-license source was tokenized")
+    if not license_report["rejected_sources"]:
+        raise RuntimeError("MidiTok license report did not capture the blocked source")
     if not summary.acceptable_information_loss:
         raise RuntimeError(
             f"MidiTok reconstruction loss too high: {summary.max_information_loss_ratio}"
         )
-    if not all(Path(segment.reconstructed_midi_path or "").exists() for segment in train_segments):
-        raise RuntimeError("MidiTok smoke did not reconstruct every train segment")
+    if not all(Path(segment.reconstructed_midi_path or "").exists() for segment in segments):
+        raise RuntimeError("MidiTok smoke did not reconstruct every tokenized segment")
     if not _metadata_fields_present(metadata):
         raise RuntimeError("MidiTok metadata is missing a required PR-24 field")
-    if not license_report["rejected_sources"]:
-        raise RuntimeError("MidiTok license report did not capture the blocked source")
+    for role in MIDITOK_TRAINING_ROLES:
+        for split in ("train", "val", "test"):
+            if not (output_dir / role / f"{split}.jsonl").exists():
+                raise RuntimeError(f"Missing stable split output for {role}/{split}")
 
     report = {
         "status": "ok",
@@ -99,7 +101,9 @@ def main() -> None:
         "roles": list(MIDITOK_TRAINING_ROLES),
         "total_segments": summary.total_segments,
         "train_segments": summary.train_segments,
-        "rejected_segments": summary.rejected_segments,
+        "val_segments": summary.val_segments,
+        "test_segments": summary.test_segments,
+        "rejected_sources": summary.rejected_sources,
         "role_counts": summary.role_counts,
         "split_counts": summary.split_counts,
         "average_information_loss_ratio": summary.average_information_loss_ratio,
@@ -107,6 +111,7 @@ def main() -> None:
         "acceptable_information_loss": summary.acceptable_information_loss,
         "tokenization_summary_path": summary.summary_path,
         "license_report_path": summary.license_report_path,
+        "quality_report_path": summary.quality_report_path,
         "tokenizer_path": summary.tokenizer_path,
     }
     report_path = ROOT / "outputs/model_smoke/miditok_smoke_summary.json"

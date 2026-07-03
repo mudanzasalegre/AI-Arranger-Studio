@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import mido
 import pytest
 import yaml
 from model_backends import (
@@ -10,10 +11,12 @@ from model_backends import (
     ModelBackendUnavailableError,
     ModelGenerationError,
     ModelGenerationRequest,
+    StatisticalCustomRoleBackend,
     build_model_backend_registry,
     inspect_custom_role_model,
 )
 from model_backends.config import AIModelsConfig, BackendConfig
+from training import RoleTrainingSegment, train_custom_role_ngram_checkpoints
 
 
 def test_custom_role_loader_marks_missing_checkpoint_unavailable(tmp_path):
@@ -27,7 +30,7 @@ def test_custom_role_loader_marks_missing_checkpoint_unavailable(tmp_path):
 
     assert inspection.available is False
     assert inspection.commercial_use == "unknown"
-    assert len(inspection.missing_files) == 5
+    assert len(inspection.missing_files) == 6
     assert "training_manifest.yaml" in inspection.unavailable_reason
 
 
@@ -156,6 +159,87 @@ def test_custom_role_registry_lists_available_backend_without_weight_loading(tmp
     assert model["metadata"]["commercial_allowed"] is True
 
 
+def test_statistical_custom_role_backend_generates_midi_and_tokens(tmp_path):
+    train_custom_role_ngram_checkpoints(
+        _role_segments(),
+        tmp_path / "custom",
+        seed=3410,
+        ngram_order=3,
+    )
+    checkpoint_dir = tmp_path / "custom" / "melody" / "jazz_melody_v001"
+    backend = StatisticalCustomRoleBackend(
+        backend_id="custom_jazz_melody_v001",
+        role="melody",
+        checkpoint_dir=checkpoint_dir,
+        output_dir=tmp_path / "raw",
+    )
+
+    assert backend.is_available() is True
+    assert backend.capabilities.token_output is True
+    result = backend.generate(
+        ModelGenerationRequest(
+            request_id="statistical-unit",
+            task="infill_bars",
+            role_intent={"role": "melody", "density": "medium"},
+            track_id="alto_sax",
+            bars=[1, 2],
+            seed=3411,
+            metadata={"export_mode": "commercial"},
+        )
+    )
+
+    artifacts = {artifact.artifact_type: artifact for artifact in result.artifacts}
+    assert set(artifacts) == {"midi", "tokens"}
+    assert Path(artifacts["midi"].path).exists()
+    payload = json.loads(Path(artifacts["tokens"].path).read_text(encoding="utf-8"))
+    assert payload["generation_source"] == "statistical_custom_role_model"
+    assert payload["model"]["model_type"] == "custom_role_ngram"
+    assert payload["target_tokens"][0] == "BOS"
+    assert artifacts["midi"].metadata["note_count"] > 0
+
+
+def test_statistical_custom_role_drums_emit_supported_drum_pitches(tmp_path):
+    train_custom_role_ngram_checkpoints(
+        _role_segments(),
+        tmp_path / "custom",
+        seed=3412,
+        ngram_order=3,
+    )
+    checkpoint_dir = tmp_path / "custom" / "drums" / "jazz_drums_v001"
+    backend = StatisticalCustomRoleBackend(
+        backend_id="custom_jazz_drums_v001",
+        role="drums",
+        checkpoint_dir=checkpoint_dir,
+        output_dir=tmp_path / "raw",
+    )
+
+    result = backend.generate(
+        ModelGenerationRequest(
+            request_id="statistical-drums-unit",
+            task="infill_bars",
+            role_intent={"role": "drums", "density": "medium"},
+            track_id="drum_kit",
+            bars=[11, 12],
+            seed=3413,
+            metadata={"export_mode": "commercial"},
+        )
+    )
+    midi_artifact = next(
+        artifact for artifact in result.artifacts if artifact.artifact_type == "midi"
+    )
+    midi_file = mido.MidiFile(midi_artifact.path)
+    pitches = {
+        int(message.note)
+        for track in midi_file.tracks
+        for message in track
+        if not message.is_meta
+        and message.type == "note_on"
+        and int(getattr(message, "velocity", 0)) > 0
+    }
+
+    assert pitches <= {36, 38, 42, 44, 45, 47, 49, 50, 51}
+
+
 def _checkpoint(
     path: Path,
     *,
@@ -201,4 +285,39 @@ def _checkpoint(
         + "\n",
         encoding="utf-8",
     )
+    (path / "metrics.json").write_text(
+        json.dumps({"schema_version": "0.1.0", "role": role, "segment_count": 1}) + "\n",
+        encoding="utf-8",
+    )
     return path
+
+
+def _role_segments() -> list[RoleTrainingSegment]:
+    roles = ("melody", "walking_bass", "piano_comping", "horn_responses", "drums")
+    segments: list[RoleTrainingSegment] = []
+    for role in roles:
+        for index, split in enumerate(("train", "val", "test")):
+            segments.append(
+                RoleTrainingSegment(
+                    id=f"{role}_{index}",
+                    role=role,
+                    split=split,
+                    tokens=[
+                        "BOS",
+                        f"ROLE={role}",
+                        "STYLE=hard_bop",
+                        f"CELL={index}",
+                        "DUR=1.0",
+                        "EOS",
+                    ],
+                    style="hard_bop",
+                    source_file_id=f"source_{role}_{index}",
+                    source_path=f"synthetic/{role}_{index}.mid",
+                    source_hash=f"hash-{role}-{index}",
+                    source_dataset="synthetic_unit",
+                    license="CC0-1.0",
+                    commercial_training="allowed",
+                    quality=4,
+                )
+            )
+    return segments

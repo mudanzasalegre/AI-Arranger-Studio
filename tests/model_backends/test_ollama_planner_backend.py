@@ -50,6 +50,24 @@ def test_ollama_planner_backend_availability_checks_model_tags():
     assert backend.is_available() is True
 
 
+def test_ollama_planner_backend_falls_back_to_json_format_when_schema_fails():
+    calls = []
+    backend = OllamaPlannerBackend(
+        model_name="qwen3:8b",
+        base_url="http://ollama.test/api",
+        client_factory=lambda **kwargs: _SchemaFallbackClient(calls),
+    )
+
+    raw = backend.generate_plan_json(prompt="plan hard bop", system_prompt="system rules")
+
+    assert json.loads(raw)["style"] == "hard_bop"
+    assert [call["json"]["format"] for call in calls] == [
+        calls[0]["json"]["format"],
+        "json",
+    ]
+    assert calls[0]["json"]["format"]["type"] == "object"
+
+
 def test_ollama_planner_backend_unavailable_when_model_missing():
     backend = OllamaPlannerBackend(
         model_name="qwen3:8b",
@@ -92,6 +110,27 @@ class _FakeResponse:
 
     def json(self):
         return self.payload
+
+
+class _SchemaFallbackClient:
+    def __init__(self, calls):
+        self.calls = calls
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return None
+
+    def post(self, url, *, json):
+        self.calls.append({"method": "POST", "url": url, "json": json})
+        if len(self.calls) == 1:
+            raise RuntimeError("schema format unsupported")
+        return _FakeResponse({"message": {"content": json_module_dumps(_valid_patch())}})
+
+
+def json_module_dumps(value):
+    return json.dumps(value)
 
 
 def _valid_patch() -> dict:
